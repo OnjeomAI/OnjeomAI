@@ -122,7 +122,7 @@ python data/korean_qa/preprocess.py \
 | max_length | 1024 |
 | 학습 epoch | 2 |
 | 배치 사이즈 | 1 (gradient accumulation 8, effective batch 8) |
-| 학습률 | 2e-4 (cosine scheduler, warmup 5%) |
+| 학습률 | 1e-4 (cosine scheduler, warmup 5%) |
 | 최적화 | paged_adamw_8bit |
 | 학습 환경 | RTX 4060 Ti (VRAM 8GB) |
 | 소요 시간 | 약 8~10시간 |
@@ -159,10 +159,10 @@ GET  /user/progress      # 학습 현황 조회
 ## 브랜치 전략
 
 ```
-main                  # 배포용 (직접 푸시 금지)
-dev                   # 통합 테스트용
-feature/korean-qa     # 국어 QA 모델 작업 (이성진)
-feature/writing       # 글쓰기 평가 모델 (팀원)
+main                       # 배포용 (직접 푸시 금지)
+develop                    # 통합 테스트용
+feat/korean-qa-model       # 국어 QA 모델 작업 (이성진)
+feat/writing               # 글쓰기 평가 모델 (팀원)
 ```
 
 ## 현재 진행 상황
@@ -171,8 +171,8 @@ feature/writing       # 글쓰기 평가 모델 (팀원)
 - [x] 데이터 전처리 (JSON → JSONL 변환, Train/Val 분리)
 - [x] 베이스 모델 선정 (Qwen2.5-3B-Instruct)
 - [x] LoRA fine-tuning 코드 작성
-- [ ] 로컬 GPU (RTX 4060 Ti)에서 학습 완료
-- [ ] 모델 성능 평가
+- [x] 로컬 GPU (RTX 4060 Ti)에서 학습 완료
+- [x] 모델 성능 평가 (정확도 95%, clean_val 121건 기준)
 - [ ] RAG 파이프라인 구축
 - [ ] 자동 채점 시스템 구현
 
