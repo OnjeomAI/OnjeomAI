@@ -1,0 +1,38 @@
+# 가상환경
+.venv/
+
+# 모델 가중치 및 학습 결과
+output/
+
+# 원천 데이터 (저작권)
+data/Training/
+data/Validation/
+
+# 생성된 대용량 데이터셋
+data/*.jsonl
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 환경변수
+.env
+
+# 임시 파일
+sample_test.txt
+새 텍스트 문서.txt
+
+# Claude Code 내부 파일
+CLAUDE.md
+
+# 개발 유틸 (루트 레벨 스크립트만 제외)
+/check_leak.py
+/check_leak2.py
+/make_clean_val.py
+/test_model_v2.py
+/train.py
+/train_v2.py
