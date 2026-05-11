@@ -41,7 +41,7 @@ onjeom/
 │   ├── korean_qa/                 # 국어 교과 QA 모델 (담당: 이성진)
 │   │   ├── train.py               # Qwen2.5-3B QLoRA fine-tuning
 │   │   └── inference.py           # 모델 추론
-│   └── writing/                   # 글쓰기 평가 모델 (팀원 담당)
+│   └── writing/                   # 글쓰기 평가 모델 (담당: 김우주)
 │       ├── train.py               # Llama3.1 fine-tuning
 │       └── inference.py
 │
@@ -125,7 +125,7 @@ python data/korean_qa/preprocess.py \
 | 학습률 | 2e-4 (cosine scheduler, warmup 5%) |
 | 최적화 | paged_adamw_8bit |
 | 학습 환경 | RTX 4060 Ti (VRAM 8GB) |
-| 소요 시간 | 약 8~10시간 |
+| 소요 시간 | 약 20시간 |
 
 **학습 실행:**
 
