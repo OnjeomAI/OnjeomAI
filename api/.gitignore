@@ -1,0 +1,18 @@
+# 모델 파일 (용량 큼 - 별도 공유)
+models/
+chroma_db/
+
+# 환경변수
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 기타
+*.safetensors
+*.bin
+*.pt

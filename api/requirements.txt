@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+torch
+transformers
+peft
+accelerate
+bitsandbytes
+chromadb
+sentence-transformers
