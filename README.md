@@ -20,9 +20,9 @@
 | LLM (국어 QA) | Qwen2.5-3B-Instruct + QLoRA fine-tuning |
 | LLM (글쓰기 평가) | Llama 3.1 + fine-tuning |
 | 학습 프레임워크 | transformers, peft, trl, bitsandbytes |
-| 데이터 처리 | Python, HuggingFace Datasets |
-| 백엔드 | FastAPI |
-| 벡터 DB | ChromaDB / FAISS (RAG용) |
+| AI 서비스 | FastAPI |
+| 벡터 DB | ChromaDB (RAG용) |
+| 배포 | AWS EC2 |
 | 프론트엔드 | 미정 |
 
 ## 레포지토리 구조
@@ -45,141 +45,95 @@ onjeom/
 │       ├── train.py               # Llama3.1 fine-tuning
 │       └── inference.py
 │
-├── api/
-│   ├── app.py                     # FastAPI 메인
-│   ├── korean_qa_router.py        # 국어 QA 라우터
-│   └── writing_router.py          # 글쓰기 평가 라우터
+├── api/                           # AI API 서버 ← 팀원 필독
+│   ├── README.md                  # 실행 및 테스트 방법
+│   ├── app/
+│   │   ├── main.py                # FastAPI 진입점
+│   │   ├── core/                  # 모델 로딩 / 환경설정
+│   │   ├── routers/
+│   │   │   ├── korean_qa.py       # 국어 QA 라우터 (담당: 이성진)
+│   │   │   └── writing.py         # 글쓰기 평가 라우터 (담당: 김우주)
+│   │   ├── services/              # 비즈니스 로직
+│   │   └── schemas/               # 요청/응답 타입
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── requirements.txt
 │
 └── notebooks/
     └── korean_qa_train.ipynb      # Colab/Kaggle 학습 노트북
 ```
 
+## AI 서비스 API
+
+| 엔드포인트 | 설명 | 담당 | 우선순위 |
+|---|---|---|---|
+| `POST /api/grading/grade` | 키워드 매칭 + LLM 2단계 자동 채점 | 이성진 | 필수 |
+| `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 이성진 | 필수 |
+| `POST /api/tutor/explain` | 용어/문장 쉬운 설명 | 이성진 | 필수 |
+| `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 필수 |
+| `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 필수 |
+| `POST /api/writing/evaluate` | 글쓰기 평가 | 김우주 | 필수 |
+| `GET /health` | 서버 상태 확인 | - | - |
+
+자세한 테스트 방법 → [`api/README.md`](./api/README.md)
+
+## 모델
+
+| 모델 | 베이스 | 담당 | 허브 |
+|---|---|---|---|
+| 국어 QA | Qwen2.5-3B-Instruct + QLoRA | 이성진 | [Onjeom/korean_qa](https://huggingface.co/Onjeom/korean_qa) |
+| 글쓰기 평가 | Llama 3.1 (예정) | 김우주 | - |
+
 ## 데이터셋
 
 **국어 교과 지문형 문제 데이터 (AI Hub)**
 
-- **출처**: [AI Hub - 국어 교과 지문형 문제 데이터](https://aihub.or.kr)
-- **라이선스**: 저작권 구매 데이터 (재배포 불가)
-- **규모**: 총 10,270 세트 (문항 + 지문 + 정답/오답 + 해설)
+- **규모**: 총 10,270 세트 (지문 + 주관식 문항 + 선택지 + 정답 + 해설)
+- **라이선스**: AI Hub 이용약관 (재배포 불가, 직접 다운로드 필요)
 
-| 학교급/학년 | 수량 | 비율 |
-|------------|------|------|
-| 중학교 1학년 | 3,001 | 29.2% |
-| 중학교 2학년 | 2,307 | 22.5% |
-| 중학교 3학년 | 2,936 | 28.6% |
-| 고등학교 1학년 | 1,501 | 14.6% |
-| 고등학교 2학년 | 525 | 5.1% |
-| **합계** | **10,270** | **100%** |
+| 학교급/학년 | 수량 |
+|---|---|
+| 중학교 1학년 | 3,001 |
+| 중학교 2학년 | 2,307 |
+| 중학교 3학년 | 2,936 |
+| 고등학교 1학년 | 1,501 |
+| 고등학교 2학년 | 525 |
 
-- **난이도 분포**: 상(3.8%) / 중(26.7%) / 하(69.6%)
-- **포맷**: 원천데이터(PNG) + 라벨링데이터(JSON)
-
-### 데이터 전처리 결과
-
-- 전체 JSON 파일: 17,453개 (Training + Validation)
-  - Training: 16,426건
-  - Validation: 1,027건
-
-### 데이터 사용 방법
-
-1. AI Hub에서 직접 다운로드
-2. 전처리 스크립트 실행:
-
-```bash
-python data/korean_qa/preprocess.py \
-  --base_path "다운로드경로/data" \
-  --save_path "data/korean_qa/output"
-```
-
-## 모델 학습
-
-### 국어 QA 모델 (Qwen2.5-3B-Instruct + QLoRA)
-
-**fine-tuning 데이터 포맷:**
-
-```json
-{
-  "instruction": "다음 지문을 읽고 문항에 답하시오.",
-  "input": "[지문]\n...\n\n[문항]\n...",
-  "output": "정답: ②\n\n해설: ...",
-  "metadata": {
-    "난이도": "하",
-    "학교급": "중학교",
-    "학년": "1학년"
-  }
-}
-```
-
-**학습 설정:**
+## 모델 학습 설정
 
 | 항목 | 값 |
-|------|-----|
+|---|---|
 | 베이스 모델 | Qwen/Qwen2.5-3B-Instruct |
-| 양자화 | 4bit QLoRA (NF4, double quant) |
-| LoRA rank | 16 |
-| LoRA alpha | 32 |
-| Target modules | q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj |
-| max_length | 1024 |
-| 학습 epoch | 2 |
-| 배치 사이즈 | 1 (gradient accumulation 8, effective batch 8) |
-| 학습률 | 2e-4 (cosine scheduler, warmup 5%) |
-| 최적화 | paged_adamw_8bit |
-| 학습 환경 | RTX 4060 Ti (VRAM 8GB) |
-| 소요 시간 | 약 20시간 |
-
-**학습 실행:**
-
-```bash
-pip install transformers trl peft accelerate bitsandbytes
-python models/korean_qa/train.py
-```
-
-## AI 기능 명세
-
-| 기능 | 설명 | 우선순위 |
-|------|------|---------|
-| RAG 기반 AI 튜터 | 국어 독해 자료 기반 질문 답변 (Vector DB + LLM) | 필수 |
-| LLM 자동 채점 | 키워드 기반 1차 채점 + LLM 문맥 분석 2차 채점 (0~100점) | 필수 |
-| 점수 구간별 피드백 | 80~100 / 50~79 / 0~49점 구간별 맞춤 피드백 생성 | 우대 |
-| 오답 심층 분석 | Chain-of-Thought로 오류 유형 분류 및 재설명 | 우대 |
-| 동적 학습 경로 재조정 | 연속 저득점 시 커리큘럼 자동 재배열 | 선택 |
-| 답변 변화 추적 | 재풀이 시 이전 답변과 비교하여 성장 메시지 생성 | 우대 |
-| 내 답변 vs 모범답안 비교 | 키워드 하이라이트로 누락/포함 시각화 | 우대 |
-
-## API 구조
-
-```
-POST /qa/answer          # 문제 풀이 요청
-POST /qa/grade           # 주관식 채점 요청
-POST /qa/feedback        # 피드백 생성
-POST /writing/evaluate   # 글쓰기 평가 (팀원 담당)
-GET  /user/progress      # 학습 현황 조회
-```
+| 양자화 | 4-bit QLoRA (NF4, double quant) |
+| LoRA rank / alpha | 16 / 32 |
+| Epochs | 2 |
+| Learning rate | 1e-4 (cosine, warmup 5%) |
+| Optimizer | paged_adamw_8bit |
+| Max length | 1024 |
+| 학습 환경 | RTX 4060 Ti 8GB |
 
 ## 브랜치 전략
 
 ```
-main                  # 배포용 (직접 푸시 금지)
-dev                   # 통합 테스트용
-feature/korean-qa     # 국어 QA 모델 작업 (이성진)
-feature/writing       # 글쓰기 평가 모델 (팀원)
+main          # 배포용 (직접 푸시 금지)
+develop       # 통합 테스트용
+feat/*        # 기능 개발
 ```
 
 ## 현재 진행 상황
 
-- [x] 데이터 수집 (AI Hub 국어 교과 지문형 문제 데이터)
-- [x] 데이터 전처리 (JSON → JSONL 변환, Train/Val 분리)
-- [x] 베이스 모델 선정 (Qwen2.5-3B-Instruct)
-- [x] LoRA fine-tuning 코드 작성
-- [ ] 로컬 GPU (RTX 4060 Ti)에서 학습 완료
-- [ ] 모델 성능 평가
-- [ ] RAG 파이프라인 구축
-- [ ] 자동 채점 시스템 구현
+- [x] 데이터 수집 및 전처리
+- [x] Qwen2.5-3B QLoRA fine-tuning (v1, v2)
+- [x] HuggingFace 모델 업로드 (Onjeom/korean_qa)
+- [x] FastAPI AI 서비스 구조 구축
+- [x] 채점 / RAG 튜터 / 커리큘럼 API 구현
+- [ ] Swagger 테스트 완료
+- [ ] AWS EC2 배포
+- [ ] 글쓰기 평가 모델 (담당: 김우주)
 
 ## 참고 자료
 
 - [AI Hub - 국어 교과 지문형 문제 데이터](https://aihub.or.kr)
 - [Qwen2.5 모델](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct)
 - [HuggingFace PEFT](https://github.com/huggingface/peft)
-- [TRL - Transformer Reinforcement Learning](https://github.com/huggingface/trl)
-- 한옥영. (2023). 생성형 AI 기반 학습자 맞춤형 교육 시스템 설계. 컴퓨터교육학회 논문지, 26(6)
+- [TRL](https://github.com/huggingface/trl)
