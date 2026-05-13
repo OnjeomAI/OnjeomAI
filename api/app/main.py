@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.core.model import model_manager
-from app.api import grading, tutor, curriculum, indexing
+from app.routers import korean_qa, writing  # korean_qa: 이성진 / writing: 김우주
 
 
 @asynccontextmanager
@@ -18,10 +18,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="온점 AI Service", lifespan=lifespan)
 
-app.include_router(grading.router, prefix="/api")
-app.include_router(tutor.router, prefix="/api")
-app.include_router(curriculum.router, prefix="/api")
-app.include_router(indexing.router, prefix="/api")
+app.include_router(korean_qa.router, prefix="/api")  # 담당: 이성진
+app.include_router(writing.router, prefix="/api")    # 담당: 김우주
 
 
 @app.get("/health")
