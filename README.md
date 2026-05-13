@@ -32,44 +32,57 @@ onjeom/
 ├── README.md
 ├── .gitignore
 │
-├── ai-service/                    # AI API 서버 (담당: 이성진)
-│   ├── README.md                  # 실행 및 테스트 방법 ← 팀원 필독
+├── data/
+│   └── korean_qa/
+│       ├── preprocess.py          # AI Hub JSON → JSONL 변환 스크립트
+│       └── README.md              # 데이터 출처 및 전처리 방법
+│
+├── models/
+│   ├── korean_qa/                 # 국어 교과 QA 모델 (담당: 이성진)
+│   │   ├── train.py               # Qwen2.5-3B QLoRA fine-tuning
+│   │   └── inference.py           # 모델 추론
+│   └── writing/                   # 글쓰기 평가 모델 (담당: 김우주)
+│       ├── train.py               # Llama3.1 fine-tuning
+│       └── inference.py
+│
+├── api/                           # AI API 서버 ← 팀원 필독
+│   ├── README.md                  # 실행 및 테스트 방법
 │   ├── app/
 │   │   ├── main.py                # FastAPI 진입점
 │   │   ├── core/                  # 모델 로딩 / 환경설정
-│   │   ├── api/                   # 엔드포인트 라우터
-│   │   ├── services/              # 채점·RAG·커리큘럼 로직
+│   │   ├── routers/
+│   │   │   ├── korean_qa.py       # 국어 QA 라우터 (담당: 이성진)
+│   │   │   └── writing.py         # 글쓰기 평가 라우터 (담당: 김우주)
+│   │   ├── services/              # 비즈니스 로직
 │   │   └── schemas/               # 요청/응답 타입
-│   ├── models/                    # LoRA 어댑터 (gitignore됨)
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── requirements.txt
 │
-└── datasets/
-    └── 29.국어 교과 지문형 문제 데이터/
-        ├── train_v2.py            # Qwen2.5-3B QLoRA 학습 스크립트
-        └── test_model.py          # 모델 추론 테스트
+└── notebooks/
+    └── korean_qa_train.ipynb      # Colab/Kaggle 학습 노트북
 ```
 
 ## AI 서비스 API
 
-| 엔드포인트 | 설명 | 우선순위 |
-|---|---|---|
-| `POST /api/grading/grade` | 키워드 매칭 + LLM 2단계 자동 채점 | 필수 |
-| `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 필수 |
-| `POST /api/tutor/explain` | 용어/문장 쉬운 설명 | 필수 |
-| `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 필수 |
-| `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 필수 |
-| `GET /health` | 서버 상태 확인 | - |
+| 엔드포인트 | 설명 | 담당 | 우선순위 |
+|---|---|---|---|
+| `POST /api/grading/grade` | 키워드 매칭 + LLM 2단계 자동 채점 | 이성진 | 필수 |
+| `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 이성진 | 필수 |
+| `POST /api/tutor/explain` | 용어/문장 쉬운 설명 | 이성진 | 필수 |
+| `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 필수 |
+| `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 필수 |
+| `POST /api/writing/evaluate` | 글쓰기 평가 | 김우주 | 필수 |
+| `GET /health` | 서버 상태 확인 | - | - |
 
-자세한 테스트 방법 → [`ai-service/README.md`](./ai-service/README.md)
+자세한 테스트 방법 → [`api/README.md`](./api/README.md)
 
 ## 모델
 
-| 모델 | 베이스 | 허브 |
-|---|---|---|
-| 국어 QA | Qwen2.5-3B-Instruct + QLoRA | [Onjeom/korean_qa](https://huggingface.co/Onjeom/korean_qa) |
-| 글쓰기 평가 | Llama 3.1 (예정) | - |
+| 모델 | 베이스 | 담당 | 허브 |
+|---|---|---|---|
+| 국어 QA | Qwen2.5-3B-Instruct + QLoRA | 이성진 | [Onjeom/korean_qa](https://huggingface.co/Onjeom/korean_qa) |
+| 글쓰기 평가 | Llama 3.1 (예정) | 김우주 | - |
 
 ## 데이터셋
 
@@ -104,7 +117,7 @@ onjeom/
 ```
 main          # 배포용 (직접 푸시 금지)
 develop       # 통합 테스트용
-feature/*     # 기능 개발
+feat/*        # 기능 개발
 ```
 
 ## 현재 진행 상황
@@ -116,7 +129,7 @@ feature/*     # 기능 개발
 - [x] 채점 / RAG 튜터 / 커리큘럼 API 구현
 - [ ] Swagger 테스트 완료
 - [ ] AWS EC2 배포
-- [ ] 글쓰기 평가 모델 (팀원 담당)
+- [ ] 글쓰기 평가 모델 (담당: 김우주)
 
 ## 참고 자료
 
