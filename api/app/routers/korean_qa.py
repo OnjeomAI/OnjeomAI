@@ -1,6 +1,5 @@
 # 담당: 이성진
 from fastapi import APIRouter, BackgroundTasks
-from fastapi.concurrency import run_in_threadpool
 from app.schemas.grading import GradeRequest, GradeResponse
 from app.schemas.tutor import TutorRequest, TutorResponse, ExplainRequest, ExplainResponse
 from app.schemas.curriculum import CurriculumRequest, CurriculumResponse
@@ -15,9 +14,8 @@ router = APIRouter(tags=["korean_qa"])
 
 # ── 채점 ──────────────────────────────────────────────────────────
 @router.post("/grading/grade", response_model=GradeResponse)
-async def grade_answer(req: GradeRequest):
-    return await run_in_threadpool(
-        grading_service.grade,
+def grade_answer(req: GradeRequest):
+    return grading_service.grade(
         passage=req.passage,
         question=req.question,
         model_answer=req.model_answer,
@@ -27,7 +25,8 @@ async def grade_answer(req: GradeRequest):
 
 
 # ── AI 튜터 ───────────────────────────────────────────────────────
-def _ask(req: TutorRequest) -> TutorResponse:
+@router.post("/tutor/ask", response_model=TutorResponse)
+def ask_tutor(req: TutorRequest):
     results = rag_service.search(req.question)
     context = "\n\n".join(r["text"] for r in results)
     sources = list({r["metadata"].get("content_id", "") for r in results})
@@ -46,7 +45,8 @@ def _ask(req: TutorRequest) -> TutorResponse:
     return TutorResponse(answer=answer, sources=sources)
 
 
-def _explain(req: ExplainRequest) -> ExplainResponse:
+@router.post("/tutor/explain", response_model=ExplainResponse)
+def explain_term(req: ExplainRequest):
     context_block = f"\n\n[문맥]\n{req.context}" if req.context else ""
     prompt = f"""중학생도 이해할 수 있게 쉽게 설명해주세요.{context_block}
 
@@ -61,21 +61,10 @@ def _explain(req: ExplainRequest) -> ExplainResponse:
     return ExplainResponse(explanation=explanation)
 
 
-@router.post("/tutor/ask", response_model=TutorResponse)
-async def ask_tutor(req: TutorRequest):
-    return await run_in_threadpool(_ask, req)
-
-
-@router.post("/tutor/explain", response_model=ExplainResponse)
-async def explain_term(req: ExplainRequest):
-    return await run_in_threadpool(_explain, req)
-
-
 # ── 커리큘럼 ──────────────────────────────────────────────────────
 @router.post("/curriculum/generate", response_model=CurriculumResponse)
-async def generate_curriculum(req: CurriculumRequest):
-    return await run_in_threadpool(
-        curriculum_service.generate,
+def generate_curriculum(req: CurriculumRequest):
+    return curriculum_service.generate(
         theta=req.theta,
         daily_goal=req.daily_goal,
         weak_areas=req.weak_areas,
@@ -84,7 +73,7 @@ async def generate_curriculum(req: CurriculumRequest):
 
 # ── 벡터 인덱싱 ───────────────────────────────────────────────────
 @router.post("/indexing/index", response_model=IndexResponse)
-async def index_content(req: IndexRequest, background_tasks: BackgroundTasks):
+def index_content(req: IndexRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(
         rag_service.index_content,
         content_id=req.content_id,
