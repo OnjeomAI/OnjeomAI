@@ -23,7 +23,6 @@
 | AI 서비스 | FastAPI |
 | 벡터 DB | ChromaDB (RAG용) |
 | 배포 | AWS EC2 |
-| 프론트엔드 | 미정 |
 
 ## 레포지토리 구조
 
