@@ -81,7 +81,7 @@ onjeom/
 | 모델 | 베이스 | 담당 | 허브 |
 |---|---|---|---|
 | 국어 QA | Qwen2.5-3B-Instruct + QLoRA | 이성진 | [Onjeom/korean_qa](https://huggingface.co/Onjeom/korean_qa) |
-| 글쓰기 평가 | Llama 3.1 (예정) | 김우주 | - |
+| 글쓰기 평가 | Llama 3.1 (예정) | 김우주 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
 
 ## 데이터셋
 
