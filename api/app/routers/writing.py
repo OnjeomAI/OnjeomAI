@@ -5,11 +5,14 @@ from app.schemas.writing import (
     CompareAnswersResponse,
     CurriculumAdjustRequest,
     CurriculumAdjustResponse,
+    IrtEstimateRequest,
+    IrtEstimateResponse,
     WeaknessReportRequest,
     WeaknessReportResponse,
     WritingEvaluateRequest,
     WritingEvaluateResponse,
 )
+from app.services.irt_service import estimate_theta
 from app.services.writing_service import (
     adjust_curriculum,
     compare_answers,
@@ -98,5 +101,37 @@ def weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
     """
     try:
         return generate_weakness_report(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/irt/estimate",
+    response_model=IrtEstimateResponse,
+    summary="IRT 기반 학생 능력 추정",
+)
+def irt_estimate(req: IrtEstimateRequest) -> IrtEstimateResponse:
+    """
+    학생의 문제 응답 이력을 바탕으로 **1PL IRT (Rasch 모델)**로 능력 수준을 추정합니다.
+
+    **파라미터 매핑 (DB 스키마 변경 없음)**
+    - difficulty 1→b=-2, 2→b=-1, 3→b=0, 4→b=1, 5→b=2
+    - a=1.0 고정 (변별도), c=0.0 고정 (서술형이므로 추측 없음)
+
+    **채점 이진화**
+    - score ≥ 50 → 정답(1), 미만 → 오답(0)
+
+    **알고리즘**
+    - EAP(Expected A Posteriori): θ 격자(-4~4) × N(0,1) 사전분포 → 사후 기댓값
+
+    **반환값**
+    - `theta`: EAP 추정치 (표준화 척도, 평균 0·표준편차 1)
+    - `se`: 추정 표준오차 (낮을수록 정확)
+    - `ability_level`: 하/중하/중/중상/상
+    - `next_difficulty`: 현재 능력에 맞는 권장 난이도 (1~5)
+    """
+    try:
+        result = estimate_theta([r.model_dump() for r in req.responses])
+        return IrtEstimateResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

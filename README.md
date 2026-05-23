@@ -53,7 +53,8 @@ onjeom/
 │   │   │   ├── korean_qa.py       # 국어 QA 라우터 (담당: 이성진)
 │   │   │   └── writing.py         # 글쓰기 채점 라우터 (담당: 김우주)
 │   │   ├── services/
-│   │   │   └── writing_service.py # 글쓰기 채점 서비스 (담당: 김우주)
+│   │   │   ├── writing_service.py # 글쓰기 채점 서비스 (담당: 김우주)
+│   │   │   └── irt_service.py     # IRT 1PL 능력 추정 서비스 (담당: 김우주)
 │   │   └── schemas/
 │   │       └── writing.py         # 요청/응답 Pydantic 스키마 (담당: 김우주)
 │   ├── Dockerfile
@@ -77,6 +78,7 @@ onjeom/
 | `POST /api/writing/curriculum/adjust` | 취약 역량 기반 동적 학습 경로 재조정 | 김우주 | 구현 완료 |
 | `POST /api/writing/compare` | 이전·현재 답변 비교 및 성장 메시지 생성 | 김우주 | 구현 완료 |
 | `POST /api/writing/weakness-report` | 역량별 약점 분석 리포트 생성 | 김우주 | 구현 완료 |
+| `POST /api/writing/irt/estimate` | IRT 3PL 기반 학생 능력 수준 추정 (1PL 폴백 포함) | 김우주 | 구현 완료 |
 | `GET /health` | 서버 상태 확인 | - | 구현 완료 |
 
 자세한 테스트 방법 → [`api/README.md`](./api/README.md)
@@ -242,6 +244,73 @@ onjeom/
 
 ---
 
+### POST /api/writing/irt/estimate
+
+학생의 문제 응답 이력을 바탕으로 **3PL IRT 모델**로 능력 수준을 추정합니다.  
+문제별 `a_param` / `b_param` / `c_param`을 전달하면 완전한 3PL로 동작하고, 미전달 시 1PL (Rasch) 폴백으로 동작합니다.
+
+**파라미터 매핑 (1PL 폴백 시)**
+
+| difficulty | b 파라미터 | 설명 |
+|---|---|---|
+| 1 | -2.0 | 매우 쉬움 |
+| 2 | -1.0 | 쉬움 |
+| 3 | 0.0 | 보통 |
+| 4 | 1.0 | 어려움 |
+| 5 | 2.0 | 매우 어려움 |
+
+> 이진화 기준: score ≥ 50 → 정답
+
+**Request Body**
+
+```json
+{
+  "responses": [
+    { "difficulty": 2, "score": 70 },
+    { "difficulty": 3, "score": 45, "a_param": 1.5, "b_param": 0.3, "c_param": 0.1 },
+    { "difficulty": 4, "score": 30 }
+  ]
+}
+```
+
+| 요청 필드 | 타입 | 설명 |
+|---|---|---|
+| `difficulty` | int | 문제 난이도 (1~5, 필수) |
+| `score` | int | 학생 점수 (0~100, 필수) |
+| `a_param` | float \| null | 3PL 변별도 (0.1~4.0, 미입력 시 1.0 고정) |
+| `b_param` | float \| null | 3PL 난이도 파라미터 (−4~4, 미입력 시 difficulty 자동 매핑) |
+| `c_param` | float \| null | 3PL 추측도 (0.0~0.5, 미입력 시 0.0 고정) |
+
+**Response Body**
+
+```json
+{
+  "theta": -0.2094,
+  "se": 0.7633,
+  "ability_level": "중",
+  "next_difficulty": 3
+}
+```
+
+| 응답 필드 | 타입 | 설명 |
+|---|---|---|
+| `theta` | float | EAP 능력 추정치 (표준화 척도, μ=0 σ=1) |
+| `se` | float | 추정 표준오차 (낮을수록 정확) |
+| `ability_level` | string | 능력 수준: `하` / `중하` / `중` / `중상` / `상` |
+| `next_difficulty` | int | 권장 다음 문제 난이도 (1~5) |
+
+**능력 수준 구간**
+
+| theta 범위 | 능력 수준 | 권장 난이도 |
+|---|---|---|
+| θ < −1.5 | 하 | 1 |
+| −1.5 ≤ θ < −0.5 | 중하 | 2 |
+| −0.5 ≤ θ < 0.5 | 중 | 3 |
+| 0.5 ≤ θ < 1.5 | 중상 | 4 |
+| θ ≥ 1.5 | 상 | 5 |
+
+---
+
 ## 모델
 
 | 모델 | 베이스 | 담당 | 허브 |
@@ -266,10 +335,14 @@ onjeom/
 
 ### 글쓰기 평가 데이터 (AI Hub) — 담당: 김우주
 
-- **총 규모**: 64,017건 (세 데이터셋 혼합 학습)
+- **원본 규모**: 논술형 16,010건 + 서술형 32,006건 + 주제별 16,001건
+- **균형 샘플링**: 가장 적은 주제별(16,001건) 기준으로 세 데이터셋 균등 조정 → 합계 **48,003건**
+- **실제 학습 사용**: 점수 레이블 1~4점 (5점 데이터 없음), 점수별 2,000개씩 균등 샘플링
+  - 학습 데이터: **8,000건** (점수별 2,000건 × 4)
+  - 검증 데이터: **1,000건** (나머지 데이터에서 랜덤 샘플링)
 - **라이선스**: AI Hub 이용약관 (재배포 불가, 직접 다운로드 필요)
 
-**논술형 글쓰기 평가 데이터** (소계: 16,010건)  
+**논술형 글쓰기 평가 데이터** (원본 소계: 16,010건)  
 주제에 대한 논리적 주장·근거 서술 평가
 
 | 학교급/학년 | 수량 |
@@ -280,7 +353,7 @@ onjeom/
 | 중학교 2학년 | 2,173 |
 | 중학교 3학년 | 2,898 |
 
-**서술형 글쓰기 평가 데이터** (소계: 32,006건)  
+**서술형 글쓰기 평가 데이터** (원본 소계: 32,006건)  
 지문 기반 내용 파악 및 서술형 답안 평가
 
 | 학교급/학년 | 수량 |
@@ -291,7 +364,7 @@ onjeom/
 | 중학교 2학년 | 6,042 |
 | 중학교 3학년 | 5,306 |
 
-**주제별 글쓰기 평가 데이터** (소계: 16,001건)  
+**주제별 글쓰기 평가 데이터** (원본 소계: 16,001건 ← 균형 기준)  
 특정 주제에 대한 자유 글쓰기 평가
 
 | 연령대 | 수량 |
@@ -326,8 +399,9 @@ onjeom/
 | Learning rate | 3e-5 (cosine, warmup 5%) |
 | Optimizer | adamw_8bit |
 | Max length | 1536 |
-| 학습 데이터 | 논술형 + 서술형 + 주제별 글쓰기 평가 데이터 (AI Hub) |
-| 점수 척도 | 1~4점 (인접 정확도 87.5%, Macro F1 0.5348) |
+| 학습 데이터 | 논술형 + 서술형 + 주제별 (균형 샘플링 48,003건 → 학습 8,000 / 검증 1,000 랜덤) |
+| 점수 척도 | 1~4점 (5점 데이터 없음, 인접 정확도 87.5%, Macro F1 0.5348) |
+| 학습 환경 | RTX 5070 Ti 16GB |
 | 허브 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
 
 ## 브랜치 전략
@@ -371,7 +445,16 @@ feat/*        # 기능 개발
   - [x] 역량별 취약/보통 수준 분류 (취약 <50, 보통 50~69)
   - [x] 우선 집중 역량 자동 선정
   - [x] LLM 기반 약점 리포트 및 권장사항 생성
-- [x] 백엔드(OnjeomBE) ↔ AI API 연동 코드 구현
+- [x] IRT 능력 추정 API 구현 (POST /api/writing/irt/estimate)
+  - [x] difficulty(1~5) → b 파라미터(-2~2) 매핑 (1PL 폴백)
+  - [x] EAP 알고리즘 (N(0,1) 사전분포 × 161점 theta 격자)
+  - [x] 능력 수준 5단계 분류 (하/중하/중/중상/상) 및 권장 난이도 반환
+  - [x] 3PL 확장 — per-item a/b/c 파라미터 수신 시 완전한 3PL 모델 적용
+- [x] OnjeomBE ↔ AI API IRT 연동
+  - [x] `AiIrtService` 인터페이스 + `AiIrtServiceImpl` (RestClient) + `AiIrtServiceMock` 구현
+  - [x] `DiagnosticService.calculateTheta()` → IRT API 호출로 교체 (TODO 완료)
+  - [x] 진단 완료 시 문제별 a/b/c 파라미터 포함하여 AI API 전달
+  - [x] `Problem` 엔티티에 `aParam` / `bParam` / `cParam` nullable 컬럼 추가 (3PL 준비)
 
 ## 참고 자료
 
