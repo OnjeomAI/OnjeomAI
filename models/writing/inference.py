@@ -3,6 +3,7 @@
 Hub: Onjeom/writing-ai (Llama-3.1-8B QLoRA, unsloth)
 """
 
+import json
 import re
 import torch
 from unsloth import FastLanguageModel
@@ -27,7 +28,16 @@ RELAXED_INSTRUCTION = (
     "- 1점 (최하점): 같은 말을 무의미하게 반복하거나 꼼수가 명백한 답안"
 )
 
-# 1~4점 → 정규화 점수 (백엔드 int 반환용)
+DEEP_ANALYSIS_INSTRUCTION = (
+    "학생 답안의 오류를 분석하고 반드시 아래 JSON 형식으로만 응답하시오.\n\n"
+    "오류 유형 목록: 개념 혼동, 어휘 부족, 논리 비약, 내용 누락\n\n"
+    "응답 형식:\n"
+    '{"error_types": ["오류유형1", "오류유형2"], '
+    '"analysis": "오류 원인 상세 분석", '
+    '"improvement": "구체적 개선 방향"}'
+)
+
+# 1~4점 → 정규화 점수
 SCORE_MAP = {1: 25, 2: 50, 3: 75, 4: 100}
 
 
@@ -51,30 +61,30 @@ class WritingEvaluator:
         )
         FastLanguageModel.for_inference(self._model)
 
-    def _build_prompt(self, question_text: str, model_answer: str, user_answer: str) -> str:
-        instruction = (
-            f"{RELAXED_INSTRUCTION}\n\n"
-            f"[문제]\n{question_text}\n\n"
-            f"[모범 답안]\n{model_answer}"
-        )
-        return ALPACA_PROMPT.format(
-            instruction=instruction,
-            input=user_answer[:700],
-        )
+    def _generate(self, prompt: str, max_new_tokens: int = 512) -> str:
+        inputs = self._tokenizer([prompt], return_tensors="pt").to("cuda")
+        with torch.no_grad():
+            outputs = self._model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                temperature=0.1,
+                top_p=0.9,
+                pad_token_id=self._tokenizer.eos_token_id,
+                do_sample=True,
+            )
+        full_text = self._tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return full_text.split("### Response:\n")[-1].strip()
 
     @staticmethod
     def _parse_score(text: str) -> int:
-        """응답 텍스트에서 [최종 점수: X] 파싱, 실패 시 2 반환."""
         match = re.search(r"\[최종\s*점수\s*:\s*([1-4])\]", text)
         if match:
             return int(match.group(1))
-        # 숫자만 있는 경우 fallback
         digits = re.findall(r"\b([1-4])\b", text[-50:])
         return int(digits[-1]) if digits else 2
 
     @staticmethod
     def _parse_feedback(text: str) -> str:
-        """점수 태그 이전 텍스트를 피드백으로 반환."""
         parts = re.split(r"\[최종\s*점수\s*:", text)
         return parts[0].strip()
 
@@ -86,39 +96,25 @@ class WritingEvaluator:
         user_answer: str,
     ) -> dict:
         """
-        Args:
-            passage_text: 지문 (참고용, 프롬프트에 포함 가능)
-            question_text: 문제 지시문
-            model_answer: 모범 답안
-            user_answer: 학생 답안
+        2단계 LLM 채점 수행.
 
         Returns:
-            {
-                "raw_score": 1~4,
-                "normalized_score": 25/50/75/100,
-                "feedback": "...",
-                "full_response": "...",
-            }
+            raw_score (1~4), normalized_score (25/50/75/100), feedback, full_response
         """
         self._load()
 
-        prompt = self._build_prompt(question_text, model_answer, user_answer)
-        inputs = self._tokenizer([prompt], return_tensors="pt").to("cuda")
-
-        with torch.no_grad():
-            outputs = self._model.generate(
-                **inputs,
-                max_new_tokens=512,
-                temperature=0.1,
-                top_p=0.9,
-                pad_token_id=self._tokenizer.eos_token_id,
-                do_sample=True,
-            )
-
-        full_text = self._tokenizer.decode(outputs[0], skip_special_tokens=True)
-        response = full_text.split("### Response:\n")[-1].strip()
-
+        instruction = (
+            f"{RELAXED_INSTRUCTION}\n\n"
+            f"[문제]\n{question_text}\n\n"
+            f"[모범 답안]\n{model_answer}"
+        )
+        prompt = ALPACA_PROMPT.format(
+            instruction=instruction,
+            input=user_answer[:700],
+        )
+        response = self._generate(prompt)
         raw_score = self._parse_score(response)
+
         return {
             "raw_score": raw_score,
             "normalized_score": SCORE_MAP.get(raw_score, 50),
@@ -126,18 +122,74 @@ class WritingEvaluator:
             "full_response": response,
         }
 
+    def deep_analysis(
+        self,
+        question_text: str,
+        model_answer: str,
+        user_answer: str,
+        score: int,
+    ) -> dict:
+        """
+        50점 미만 답안에 대한 Chain-of-Thought 심층 분석.
 
-# ──────────────────────────────────────────────
-# 간단 테스트
-# ──────────────────────────────────────────────
+        Returns:
+            error_types (list), analysis (str), improvement (str)
+        """
+        self._load()
+
+        context = (
+            f"[문제]\n{question_text}\n\n"
+            f"[모범 답안]\n{model_answer}\n\n"
+            f"[학생 답안]\n{user_answer[:700]}\n\n"
+            f"[받은 점수] {score}점 / 100점"
+        )
+        prompt = ALPACA_PROMPT.format(
+            instruction=DEEP_ANALYSIS_INSTRUCTION,
+            input=context,
+        )
+        response = self._generate(prompt, max_new_tokens=300)
+
+        # JSON 파싱 시도
+        try:
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                return {
+                    "error_types": data.get("error_types", ["내용 누락"]),
+                    "analysis": data.get("analysis", response),
+                    "improvement": data.get("improvement", ""),
+                }
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+        # 파싱 실패 시 전문을 분석으로 반환
+        return {
+            "error_types": ["내용 누락"],
+            "analysis": response,
+            "improvement": "",
+        }
+
+
+# ── 간단 테스트 ──────────────────────────────────────
 
 if __name__ == "__main__":
-    evaluator = WritingEvaluator()
-    result = evaluator.evaluate(
+    ev = WritingEvaluator()
+
+    result = ev.evaluate(
         passage_text="선인장은 사막에 사는 식물이다.",
         question_text="선인장이 사막에서 살 수 있는 이유를 서술하시오.",
-        model_answer="선인장은 줄기에 물을 저장하고 잎이 가시로 변해 수분 손실을 줄이기 때문에 사막에서 살 수 있다.",
+        model_answer="선인장은 줄기에 물을 저장하고 잎이 가시로 변해 수분 손실을 줄이기 때문이다.",
         user_answer="선인장은 물을 저장해서 살 수 있다.",
     )
     print(f"점수: {result['raw_score']}점 ({result['normalized_score']}점)")
     print(f"피드백: {result['feedback']}")
+
+    if result["normalized_score"] < 50:
+        analysis = ev.deep_analysis(
+            question_text="선인장이 사막에서 살 수 있는 이유를 서술하시오.",
+            model_answer="선인장은 줄기에 물을 저장하고 잎이 가시로 변해 수분 손실을 줄이기 때문이다.",
+            user_answer="선인장은 물을 저장해서 살 수 있다.",
+            score=result["normalized_score"],
+        )
+        print(f"오류 유형: {analysis['error_types']}")
+        print(f"분석: {analysis['analysis']}")
