@@ -5,8 +5,6 @@ Hub: Onjeom/writing-ai (Llama-3.1-8B QLoRA, unsloth)
 
 import json
 import re
-import torch
-from unsloth import FastLanguageModel
 
 
 ALPACA_PROMPT = (
@@ -73,6 +71,8 @@ class WritingEvaluator:
     def _load(self):
         if self._model is not None:
             return
+        import torch  # noqa: F401  — 실제 로드 시에만 임포트
+        from unsloth import FastLanguageModel
         self._model, self._tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.model_name,
             max_seq_length=self.max_seq_length,
@@ -82,6 +82,7 @@ class WritingEvaluator:
         FastLanguageModel.for_inference(self._model)
 
     def _generate(self, prompt: str, max_new_tokens: int = 512) -> str:
+        import torch
         inputs = self._tokenizer([prompt], return_tensors="pt").to("cuda")
         with torch.no_grad():
             outputs = self._model.generate(

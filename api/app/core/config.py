@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     api_port: int = 8000
     debug: bool = False
 
+    # 모델 없이 API 스키마만 테스트할 때 사용 (MOCK_MODEL=true)
+    mock_model: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
