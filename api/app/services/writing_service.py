@@ -1,9 +1,18 @@
 from app.core.model_loader import get_writing_evaluator
 from app.schemas.writing import (
+    COMPETENCY_KO,
+    Competency,
+    CompareAnswersRequest,
+    CompareAnswersResponse,
+    CurriculumAdjustRequest,
+    CurriculumAdjustResponse,
     DeepAnalysis,
     ErrorType,
     FeedbackType,
     KeywordItem,
+    WeakCompetencyDetail,
+    WeaknessReportRequest,
+    WeaknessReportResponse,
     WritingEvaluateRequest,
     WritingEvaluateResponse,
 )
@@ -133,4 +142,116 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
         matched_keywords=matched,
         missing_keywords=missing,
         deep_analysis=deep,
+    )
+
+
+# ── 동적 학습 경로 재조정 ─────────────────────────────────────────────────────
+
+def adjust_curriculum(req: CurriculumAdjustRequest) -> CurriculumAdjustResponse:
+    """3회 연속 50점 미만 역량을 취약 역량으로 판정하여 재조정 메시지 생성."""
+    evaluator = get_writing_evaluator()
+
+    weak: list[str] = []
+    for history in req.competency_history:
+        recent = history.scores[-3:] if len(history.scores) >= 3 else history.scores
+        if recent and all(s < 50 for s in recent):
+            weak.append(COMPETENCY_KO[history.competency])
+
+    needs_adjustment = bool(weak)
+
+    if needs_adjustment:
+        result = evaluator.curriculum_adjust(weak)
+        adjustment_message = result["adjustment_message"]
+        recommended_focus = result["recommended_focus"]
+    else:
+        adjustment_message = "현재 학습 경로가 적절합니다. 꾸준히 학습을 이어나가세요!"
+        recommended_focus = "현재 역량 수준에 맞는 문제를 계속 풀어보세요."
+
+    return CurriculumAdjustResponse(
+        needs_adjustment=needs_adjustment,
+        weak_competencies=weak,
+        adjustment_message=adjustment_message,
+        recommended_focus=recommended_focus,
+    )
+
+
+# ── 답변 변화 추적 ────────────────────────────────────────────────────────────
+
+def compare_answers(req: CompareAnswersRequest) -> CompareAnswersResponse:
+    """이전·현재 답변을 비교하여 성장 메시지와 키워드 변화를 반환."""
+    evaluator = get_writing_evaluator()
+
+    newly_included: list[str] = []
+    still_missing: list[str] = []
+
+    if req.keywords:
+        for kw in req.keywords:
+            in_prev = kw.keyword in req.previous_answer
+            in_curr = kw.keyword in req.current_answer
+            if in_curr and not in_prev:
+                newly_included.append(kw.keyword)
+            elif not in_curr:
+                still_missing.append(kw.keyword)
+
+    result = evaluator.compare_answers(
+        question_text=req.question_text,
+        model_answer=req.model_answer,
+        previous_answer=req.previous_answer,
+        previous_score=req.previous_score,
+        current_answer=req.current_answer,
+        current_score=req.current_score,
+        newly_included=newly_included,
+        still_missing=still_missing,
+    )
+
+    score_diff = req.current_score - req.previous_score
+    return CompareAnswersResponse(
+        score_diff=score_diff,
+        is_improved=score_diff > 0,
+        growth_message=result["growth_message"],
+        newly_included_keywords=newly_included,
+        still_missing_keywords=still_missing,
+        analysis=result["analysis"],
+    )
+
+
+# ── 약점 분석 리포트 ──────────────────────────────────────────────────────────
+
+_LEVEL_LABELS = {True: "취약", False: "보통"}  # True = score < 50
+
+
+def generate_weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
+    """역량별 평균 점수를 분석하여 약점 리포트와 개선 권장사항 생성."""
+    evaluator = get_writing_evaluator()
+
+    competency_scores: dict[str, int] = {
+        COMPETENCY_KO[item.competency]: item.score for item in req.competency_scores
+    }
+
+    result = evaluator.weakness_report(competency_scores)
+
+    weak_details: list[WeakCompetencyDetail] = []
+    priority: str | None = None
+    lowest_score = 101
+
+    for item in req.competency_scores:
+        ko_name = COMPETENCY_KO[item.competency]
+        if item.score < 50:
+            level = "취약"
+            weak_details.append(WeakCompetencyDetail(
+                competency=ko_name, score=item.score, level=level
+            ))
+            if item.score < lowest_score:
+                lowest_score = item.score
+                priority = ko_name
+        elif item.score < 70:
+            weak_details.append(WeakCompetencyDetail(
+                competency=ko_name, score=item.score, level="보통"
+            ))
+
+    return WeaknessReportResponse(
+        weak_competencies=weak_details,
+        report=result["report"],
+        recommendations=result["recommendations"],
+        priority_competency=priority,
     )

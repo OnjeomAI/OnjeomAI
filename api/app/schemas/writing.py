@@ -6,10 +6,12 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ── 공통 ──────────────────────────────────────────────────────────────────────
+
 class FeedbackType(str, Enum):
-    EXCELLENT = "EXCELLENT"           # 80~100점
-    GOOD = "GOOD"                     # 50~79점
-    NEEDS_IMPROVEMENT = "NEEDS_IMPROVEMENT"  # 0~49점
+    EXCELLENT = "EXCELLENT"
+    GOOD = "GOOD"
+    NEEDS_IMPROVEMENT = "NEEDS_IMPROVEMENT"
 
 
 class ErrorType(str, Enum):
@@ -19,10 +21,28 @@ class ErrorType(str, Enum):
     CONTENT_OMISSION = "내용 누락"
 
 
+class Competency(str, Enum):
+    FACTUAL = "factual"
+    INFERENTIAL = "inferential"
+    CRITICAL = "critical"
+    VOCABULARY = "vocabulary"
+    LOGICAL = "logical"
+
+
+COMPETENCY_KO = {
+    Competency.FACTUAL: "사실적 독해",
+    Competency.INFERENTIAL: "추론적 독해",
+    Competency.CRITICAL: "비판적 독해",
+    Competency.VOCABULARY: "어휘력",
+    Competency.LOGICAL: "논리 구조 파악",
+}
+
 class KeywordItem(BaseModel):
     keyword: str = Field(..., description="핵심 키워드")
     weight: int = Field(..., ge=1, le=100, description="배점 비중 (1~100)")
 
+
+# ── POST /api/writing/evaluate ────────────────────────────────────────────────
 
 class WritingEvaluateRequest(BaseModel):
     passage_text: str = Field(..., description="지문 텍스트")
@@ -42,28 +62,84 @@ class DeepAnalysis(BaseModel):
 
 
 class WritingEvaluateResponse(BaseModel):
-    # ── 점수 ──────────────────────────────────────────
-    keyword_score: Optional[int] = Field(
-        None, description="1단계 키워드 기반 점수 (0~100). 키워드 미입력 시 null"
-    )
+    keyword_score: Optional[int] = Field(None, description="1단계 키워드 기반 점수 (0~100). 미입력 시 null")
     raw_score: int = Field(..., ge=1, le=4, description="LLM 원점수 (1~4점)")
     normalized_score: int = Field(..., description="LLM 정규화 점수 (25/50/75/100)")
     final_score: int = Field(..., ge=0, le=100, description="최종 점수 (0~100)")
-
-    # ── 피드백 ────────────────────────────────────────
     feedback: str = Field(..., description="LLM 채점 피드백")
     feedback_type: FeedbackType = Field(..., description="점수 구간 유형")
     score_feedback: str = Field(..., description="점수 구간별 안내 메시지")
+    matched_keywords: list[str] = Field(default_factory=list, description="포함된 키워드 (초록 하이라이트용)")
+    missing_keywords: list[str] = Field(default_factory=list, description="누락된 키워드 (빨강 하이라이트용)")
+    deep_analysis: Optional[DeepAnalysis] = Field(None, description="오답 심층 분석 (50점 미만 시에만 반환)")
 
-    # ── 키워드 분석 ───────────────────────────────────
-    matched_keywords: list[str] = Field(
-        default_factory=list, description="포함된 핵심 키워드 (초록 하이라이트용)"
-    )
-    missing_keywords: list[str] = Field(
-        default_factory=list, description="누락된 핵심 키워드 (빨강 하이라이트용)"
+
+# ── POST /api/writing/curriculum/adjust ──────────────────────────────────────
+
+class CompetencyHistory(BaseModel):
+    competency: Competency = Field(..., description="역량 유형")
+    scores: list[int] = Field(..., description="최근 점수 이력 (오래된 순)")
+
+
+class CurriculumAdjustRequest(BaseModel):
+    competency_history: list[CompetencyHistory] = Field(
+        ..., description="역량별 최근 점수 이력"
     )
 
-    # ── 심층 분석 (final_score < 50 시에만 반환) ──────
-    deep_analysis: Optional[DeepAnalysis] = Field(
-        None, description="오답 심층 분석 (50점 미만 답변에만 제공)"
+
+class CurriculumAdjustResponse(BaseModel):
+    needs_adjustment: bool = Field(..., description="커리큘럼 재조정 필요 여부")
+    weak_competencies: list[str] = Field(
+        default_factory=list, description="취약 역량 목록 (3회 연속 50점 미만)"
     )
+    adjustment_message: str = Field(..., description="사용자에게 보여줄 알림 메시지")
+    recommended_focus: str = Field(..., description="LLM 생성 개선 방향")
+
+
+# ── POST /api/writing/compare ────────────────────────────────────────────────
+
+class CompareAnswersRequest(BaseModel):
+    question_text: str = Field(..., description="문제 지시문")
+    model_answer: str = Field(..., description="모범 답안")
+    previous_answer: str = Field(..., max_length=700, description="이전 답변")
+    previous_score: int = Field(..., ge=0, le=100, description="이전 점수")
+    current_answer: str = Field(..., max_length=700, description="현재 답변")
+    current_score: int = Field(..., ge=0, le=100, description="현재 점수")
+    keywords: list[KeywordItem] = Field(default_factory=list, description="핵심 키워드")
+
+
+class CompareAnswersResponse(BaseModel):
+    score_diff: int = Field(..., description="점수 변화 (양수=향상, 음수=하락)")
+    is_improved: bool = Field(..., description="성장 여부")
+    growth_message: str = Field(..., description="성장 메시지 (예: 저번엔 이 키워드가 없었는데 이번엔 포함됐어요!)")
+    newly_included_keywords: list[str] = Field(default_factory=list, description="새로 포함된 키워드")
+    still_missing_keywords: list[str] = Field(default_factory=list, description="여전히 누락된 키워드")
+    analysis: str = Field(..., description="LLM 생성 비교 분석")
+
+
+# ── POST /api/writing/weakness-report ────────────────────────────────────────
+
+class CompetencyScoreItem(BaseModel):
+    competency: Competency = Field(..., description="역량 유형")
+    score: int = Field(..., ge=0, le=100, description="평균 점수")
+
+
+class WeaknessReportRequest(BaseModel):
+    competency_scores: list[CompetencyScoreItem] = Field(
+        ..., description="역량별 평균 점수 목록"
+    )
+
+
+class WeakCompetencyDetail(BaseModel):
+    competency: str = Field(..., description="역량명 (한국어)")
+    score: int = Field(..., description="평균 점수")
+    level: str = Field(..., description="수준 (취약/보통/양호)")
+
+
+class WeaknessReportResponse(BaseModel):
+    weak_competencies: list[WeakCompetencyDetail] = Field(
+        ..., description="취약 역량 목록 (50점 미만)"
+    )
+    report: str = Field(..., description="LLM 생성 약점 분석 리포트")
+    recommendations: list[str] = Field(..., description="역량별 개선 권장사항")
+    priority_competency: Optional[str] = Field(None, description="가장 집중해야 할 역량")

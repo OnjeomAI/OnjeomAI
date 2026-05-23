@@ -1,7 +1,21 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.writing import WritingEvaluateRequest, WritingEvaluateResponse
-from app.services.writing_service import evaluate_writing
+from app.schemas.writing import (
+    CompareAnswersRequest,
+    CompareAnswersResponse,
+    CurriculumAdjustRequest,
+    CurriculumAdjustResponse,
+    WeaknessReportRequest,
+    WeaknessReportResponse,
+    WritingEvaluateRequest,
+    WritingEvaluateResponse,
+)
+from app.services.writing_service import (
+    adjust_curriculum,
+    compare_answers,
+    evaluate_writing,
+    generate_weakness_report,
+)
 
 router = APIRouter()
 
@@ -29,5 +43,60 @@ def evaluate(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
     """
     try:
         return evaluate_writing(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/curriculum/adjust",
+    response_model=CurriculumAdjustResponse,
+    summary="동적 학습 경로 재조정",
+)
+def curriculum_adjust(req: CurriculumAdjustRequest) -> CurriculumAdjustResponse:
+    """
+    역량별 최근 점수 이력을 분석하여 취약 역량을 탐지하고 커리큘럼 재조정 메시지를 생성합니다.
+
+    - 3회 연속 50점 미만인 역량을 취약 역량으로 판정
+    - 취약 역량이 있으면 LLM이 맞춤형 재조정 메시지와 개선 방향을 생성
+    """
+    try:
+        return adjust_curriculum(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/compare",
+    response_model=CompareAnswersResponse,
+    summary="답변 변화 추적",
+)
+def compare(req: CompareAnswersRequest) -> CompareAnswersResponse:
+    """
+    이전 답변과 현재 답변을 비교하여 성장 메시지와 키워드 변화를 반환합니다.
+
+    - 새로 포함된 키워드 / 여전히 누락된 키워드 목록 제공
+    - LLM이 두 답변의 변화를 분석하여 격려 메시지 생성
+    """
+    try:
+        return compare_answers(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/weakness-report",
+    response_model=WeaknessReportResponse,
+    summary="약점 분석 리포트",
+)
+def weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
+    """
+    역량별 평균 점수를 분석하여 약점 리포트와 개선 권장사항을 생성합니다.
+
+    - 50점 미만 역량: 취약 / 50~69점: 보통으로 분류
+    - 가장 점수가 낮은 역량을 우선 집중 역량으로 지정
+    - LLM이 2~3문장의 약점 분석 리포트 생성
+    """
+    try:
+        return generate_weakness_report(req)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
