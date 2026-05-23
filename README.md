@@ -18,8 +18,8 @@
 | 분류 | 기술 |
 |------|------|
 | LLM (국어 QA) | Qwen2.5-3B-Instruct + QLoRA fine-tuning |
-| LLM (글쓰기 평가) | Llama-3.1-8B + QLoRA (unsloth) |
-| 학습 프레임워크 | transformers, peft, trl, bitsandbytes |
+| LLM (글쓰기 채점) | Llama-3.1-8B-Instruct + QLoRA (unsloth) |
+| 학습 프레임워크 | unsloth, transformers, peft, trl, bitsandbytes |
 | AI 서비스 | FastAPI |
 | 벡터 DB | ChromaDB (RAG용) |
 | 배포 | AWS EC2 |
@@ -73,10 +73,23 @@ onjeom/
 | `POST /api/tutor/explain` | 용어/문장 쉬운 설명 | 이성진 | 필수 |
 | `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 필수 |
 | `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 필수 |
-| `POST /api/writing/evaluate` | 글쓰기 평가 | 김우주 | 필수 |
+| `POST /api/writing/evaluate` | 서술형 답안 자동 채점 + 피드백 | 김우주 | 필수 |
 | `GET /health` | 서버 상태 확인 | - | - |
 
 자세한 테스트 방법 → [`api/README.md`](./api/README.md)
+
+### POST /api/writing/evaluate 상세
+
+1단계 키워드 매칭 → 2단계 LLM 채점 → 점수 구간별 피드백 → 심층 분석(50점 미만)
+
+| 응답 필드 | 설명 |
+|---|---|
+| `final_score` | 최종 점수 0~100 (키워드 40% + LLM 60%) |
+| `feedback_type` | `EXCELLENT` / `GOOD` / `NEEDS_IMPROVEMENT` |
+| `score_feedback` | 점수 구간별 안내 메시지 |
+| `matched_keywords` | 포함된 키워드 목록 (프론트 초록 하이라이트용) |
+| `missing_keywords` | 누락된 키워드 목록 (프론트 빨강 하이라이트용) |
+| `deep_analysis` | 오류 유형 분류 + 개선 방향 (50점 미만 시에만 반환) |
 
 ## 모델
 
@@ -87,7 +100,7 @@ onjeom/
 
 ## 데이터셋
 
-**국어 교과 지문형 문제 데이터 (AI Hub)**
+### 국어 교과 지문형 문제 데이터 (AI Hub) — 담당: 이성진
 
 - **규모**: 총 10,270 세트 (지문 + 주관식 문항 + 선택지 + 정답 + 해설)
 - **라이선스**: AI Hub 이용약관 (재배포 불가, 직접 다운로드 필요)
@@ -99,6 +112,17 @@ onjeom/
 | 중학교 3학년 | 2,936 |
 | 고등학교 1학년 | 1,501 |
 | 고등학교 2학년 | 525 |
+
+### 글쓰기 평가 데이터 (AI Hub) — 담당: 김우주
+
+- **라이선스**: AI Hub 이용약관 (재배포 불가, 직접 다운로드 필요)
+- 세 데이터셋을 혼합하여 학습에 활용
+
+| 데이터셋 | 설명 |
+|---|---|
+| 논술형 글쓰기 평가 데이터 | 주제에 대한 논리적 주장 및 근거 서술 평가 |
+| 서술형 글쓰기 평가 데이터 | 지문 기반 내용 파악 및 서술형 답안 평가 |
+| 주제별 글쓰기 평가 데이터 | 특정 주제에 대한 자유 글쓰기 평가 |
 
 ## 모델 학습 설정
 
@@ -127,6 +151,7 @@ onjeom/
 | Learning rate | 3e-5 (cosine, warmup 5%) |
 | Optimizer | adamw_8bit |
 | Max length | 1536 |
+| 학습 데이터 | 논술형 + 서술형 + 주제별 글쓰기 평가 데이터 (AI Hub) |
 | 점수 척도 | 1~4점 (인접 정확도 87.5%, Macro F1 0.5348) |
 | 허브 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
 
@@ -140,19 +165,42 @@ feat/*        # 기능 개발
 
 ## 현재 진행 상황
 
+### 공통
+- [x] FastAPI AI 서비스 구조 구축
+- [ ] Swagger 테스트 완료
+- [ ] AWS EC2 배포
+
+### 국어 QA (담당: 이성진)
 - [x] 데이터 수집 및 전처리
 - [x] Qwen2.5-3B QLoRA fine-tuning (v1, v2)
 - [x] HuggingFace 모델 업로드 (Onjeom/korean_qa)
-- [x] FastAPI AI 서비스 구조 구축
 - [x] 채점 / RAG 튜터 / 커리큘럼 API 구현
-- [ ] Swagger 테스트 완료
-- [ ] AWS EC2 배포
-- [x] 글쓰기 채점 모델 학습 및 HuggingFace 업로드 (Onjeom/writing-ai) — 김우주
-- [x] 글쓰기 채점 FastAPI 서버 구현 (POST /api/writing/evaluate) — 김우주
+
+### 글쓰기 채점 (담당: 김우주)
+- [x] 글쓰기 평가 데이터 수집 (논술형 + 서술형 + 주제별, AI Hub)
+- [x] Llama-3.1-8B QLoRA fine-tuning (unsloth)
+- [x] HuggingFace 모델 업로드 (Onjeom/writing-ai)
+- [x] FastAPI 채점 API 구현 (POST /api/writing/evaluate)
+  - [x] 1단계 키워드 매칭 채점
+  - [x] 2단계 LLM 채점
+  - [x] 점수 구간별 피드백 (80~100 / 50~79 / 0~49)
+  - [x] 포함/누락 키워드 응답 (프론트 하이라이트용)
+  - [x] 50점 미만 오답 심층 분석 (CoT, 오류 유형 분류)
+- [x] 백엔드(OnjeomBE) ↔ AI API 연동 코드 구현
 
 ## 참고 자료
 
-- [AI Hub - 국어 교과 지문형 문제 데이터](https://aihub.or.kr)
+**모델**
 - [Qwen2.5 모델](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct)
+- [Meta Llama 3.1](https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct)
+- [Unsloth](https://github.com/unslothai/unsloth)
+
+**학습 프레임워크**
 - [HuggingFace PEFT](https://github.com/huggingface/peft)
 - [TRL](https://github.com/huggingface/trl)
+
+**데이터셋 (AI Hub)**
+- [국어 교과 지문형 문제 데이터](https://aihub.or.kr)
+- [논술형 글쓰기 평가 데이터](https://aihub.or.kr)
+- [서술형 글쓰기 평가 데이터](https://aihub.or.kr)
+- [주제별 글쓰기 평가 데이터](https://aihub.or.kr)
