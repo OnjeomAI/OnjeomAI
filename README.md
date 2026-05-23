@@ -74,6 +74,9 @@ onjeom/
 | `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 구현 완료 |
 | `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 구현 완료 |
 | `POST /api/writing/evaluate` | 서술형 답안 자동 채점 + 피드백 | 김우주 | 구현 완료 |
+| `POST /api/writing/curriculum/adjust` | 취약 역량 기반 동적 학습 경로 재조정 | 김우주 | 구현 완료 |
+| `POST /api/writing/compare` | 이전·현재 답변 비교 및 성장 메시지 생성 | 김우주 | 구현 완료 |
+| `POST /api/writing/weakness-report` | 역량별 약점 분석 리포트 생성 | 김우주 | 구현 완료 |
 | `GET /health` | 서버 상태 확인 | - | 구현 완료 |
 
 자세한 테스트 방법 → [`api/README.md`](./api/README.md)
@@ -130,6 +133,114 @@ onjeom/
 | `matched_keywords` | string[] | 포함된 키워드 (프론트 초록 하이라이트용) |
 | `missing_keywords` | string[] | 누락된 키워드 (프론트 빨강 하이라이트용) |
 | `deep_analysis` | object \| null | 오류 유형 분류 + 개선 방향 (final_score < 50 시에만 반환) |
+
+### POST /api/writing/curriculum/adjust
+
+역량별 최근 점수 이력을 분석하여 취약 역량을 탐지하고, 커리큘럼 재조정 메시지를 생성합니다.  
+3회 연속 50점 미만인 역량을 취약 역량으로 판정합니다.
+
+**Request Body**
+
+```json
+{
+  "competency_history": [
+    { "competency": "factual", "scores": [75, 80, 90] },
+    { "competency": "inferential", "scores": [40, 35, 42] }
+  ]
+}
+```
+
+**Response Body**
+
+```json
+{
+  "needs_adjustment": true,
+  "weak_competencies": ["추론적 독해"],
+  "adjustment_message": "추론적 독해 점수가 낮아요. 관련 문제를 먼저 배치했어요.",
+  "recommended_focus": "추론적 독해 문제를 집중적으로 연습하는 것을 권장합니다."
+}
+```
+
+역량 값: `factual` / `inferential` / `critical` / `vocabulary` / `logical`
+
+---
+
+### POST /api/writing/compare
+
+이전 답변과 현재 답변을 비교하여 성장 메시지와 키워드 변화를 반환합니다.
+
+**Request Body**
+
+```json
+{
+  "question_text": "문제 지시문",
+  "model_answer": "모범 답안",
+  "previous_answer": "이전 학생 답안",
+  "previous_score": 50,
+  "current_answer": "현재 학생 답안",
+  "current_score": 75,
+  "keywords": [
+    { "keyword": "광합성", "weight": 50 }
+  ]
+}
+```
+
+**Response Body**
+
+```json
+{
+  "score_diff": 25,
+  "is_improved": true,
+  "growth_message": "저번엔 '광합성' 키워드가 없었는데 이번엔 포함됐어요. 성장했어요!",
+  "newly_included_keywords": ["광합성"],
+  "still_missing_keywords": [],
+  "analysis": "이전 답변과 현재 답변 비교 분석 텍스트"
+}
+```
+
+---
+
+### POST /api/writing/weakness-report
+
+역량별 평균 점수를 분석하여 약점 리포트와 개선 권장사항을 생성합니다.
+
+**Request Body**
+
+```json
+{
+  "competency_scores": [
+    { "competency": "factual", "score": 80 },
+    { "competency": "inferential", "score": 42 },
+    { "competency": "critical", "score": 65 },
+    { "competency": "vocabulary", "score": 55 },
+    { "competency": "logical", "score": 38 }
+  ]
+}
+```
+
+**Response Body**
+
+```json
+{
+  "weak_competencies": [
+    { "competency": "추론적 독해", "score": 42, "level": "취약" },
+    { "competency": "논리 구조 파악", "score": 38, "level": "취약" },
+    { "competency": "비판적 독해", "score": 65, "level": "보통" }
+  ],
+  "report": "추론적 독해와 논리 구조 파악 영역에서 집중적인 학습이 필요합니다.",
+  "recommendations": ["논리 구조 파악 문제를 집중 연습하세요.", "추론적 독해 문제를 집중 연습하세요."],
+  "priority_competency": "논리 구조 파악"
+}
+```
+
+| 응답 필드 | 타입 | 설명 |
+|---|---|---|
+| `weak_competencies` | object[] | 50점 미만(취약) / 50~69점(보통) 역량 목록 |
+| `report` | string | LLM 생성 약점 분석 리포트 (2~3문장) |
+| `recommendations` | string[] | 역량별 개선 권장사항 |
+| `priority_competency` | string \| null | 가장 집중해야 할 역량 (최저 점수 기준) |
+
+---
 
 ## 모델
 
@@ -250,6 +361,16 @@ feat/*        # 기능 개발
   - [x] 점수 구간별 피드백 (80~100 / 50~79 / 0~49)
   - [x] 포함/누락 키워드 응답 (프론트 하이라이트용)
   - [x] 50점 미만 오답 심층 분석 (CoT, 오류 유형 분류)
+- [x] 동적 학습 경로 재조정 API 구현 (POST /api/writing/curriculum/adjust)
+  - [x] 3회 연속 50점 미만 역량 자동 탐지
+  - [x] LLM 기반 재조정 메시지 및 개선 방향 생성
+- [x] 답변 변화 추적 API 구현 (POST /api/writing/compare)
+  - [x] 이전·현재 답변 키워드 변화 분석
+  - [x] LLM 기반 성장 메시지 생성
+- [x] 약점 분석 리포트 API 구현 (POST /api/writing/weakness-report)
+  - [x] 역량별 취약/보통 수준 분류 (취약 <50, 보통 50~69)
+  - [x] 우선 집중 역량 자동 선정
+  - [x] LLM 기반 약점 리포트 및 권장사항 생성
 - [x] 백엔드(OnjeomBE) ↔ AI API 연동 코드 구현
 
 ## 참고 자료
