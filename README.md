@@ -18,7 +18,7 @@
 | 분류 | 기술 |
 |------|------|
 | LLM (국어 QA) | Qwen2.5-3B-Instruct + QLoRA fine-tuning |
-| LLM (글쓰기 평가) | Llama 3.1 + fine-tuning |
+| LLM (글쓰기 평가) | Llama-3.1-8B + QLoRA (unsloth) |
 | 학습 프레임워크 | transformers, peft, trl, bitsandbytes |
 | AI 서비스 | FastAPI |
 | 벡터 DB | ChromaDB (RAG용) |
@@ -40,9 +40,9 @@ onjeom/
 │   ├── korean_qa/                 # 국어 교과 QA 모델 (담당: 이성진)
 │   │   ├── train.py               # Qwen2.5-3B QLoRA fine-tuning
 │   │   └── inference.py           # 모델 추론
-│   └── writing/                   # 글쓰기 평가 모델 (담당: 김우주)
-│       ├── train.py               # Llama3.1 fine-tuning
-│       └── inference.py
+│   └── writing/                   # 글쓰기 채점 모델 (담당: 김우주)
+│       ├── train.py               # Llama-3.1-8B QLoRA fine-tuning (unsloth)
+│       └── inference.py           # WritingEvaluator 클래스
 │
 ├── api/                           # AI API 서버 ← 팀원 필독
 │   ├── README.md                  # 실행 및 테스트 방법
@@ -51,9 +51,11 @@ onjeom/
 │   │   ├── core/                  # 모델 로딩 / 환경설정
 │   │   ├── routers/
 │   │   │   ├── korean_qa.py       # 국어 QA 라우터 (담당: 이성진)
-│   │   │   └── writing.py         # 글쓰기 평가 라우터 (담당: 김우주)
-│   │   ├── services/              # 비즈니스 로직
-│   │   └── schemas/               # 요청/응답 타입
+│   │   │   └── writing.py         # 글쓰기 채점 라우터 (담당: 김우주)
+│   │   ├── services/
+│   │   │   └── writing_service.py # 글쓰기 채점 서비스 (담당: 김우주)
+│   │   └── schemas/
+│   │       └── writing.py         # 요청/응답 Pydantic 스키마 (담당: 김우주)
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── requirements.txt
@@ -81,7 +83,7 @@ onjeom/
 | 모델 | 베이스 | 담당 | 허브 |
 |---|---|---|---|
 | 국어 QA | Qwen2.5-3B-Instruct + QLoRA | 이성진 | [Onjeom/korean_qa](https://huggingface.co/Onjeom/korean_qa) |
-| 글쓰기 평가 | Llama 3.1 (예정) | 김우주 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
+| 글쓰기 채점 | Llama-3.1-8B-Instruct + QLoRA (unsloth) | 김우주 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
 
 ## 데이터셋
 
@@ -100,6 +102,8 @@ onjeom/
 
 ## 모델 학습 설정
 
+### 국어 QA 모델 (담당: 이성진)
+
 | 항목 | 값 |
 |---|---|
 | 베이스 모델 | Qwen/Qwen2.5-3B-Instruct |
@@ -110,6 +114,21 @@ onjeom/
 | Optimizer | paged_adamw_8bit |
 | Max length | 1024 |
 | 학습 환경 | RTX 4060 Ti 8GB |
+
+### 글쓰기 채점 모델 (담당: 김우주)
+
+| 항목 | 값 |
+|---|---|
+| 베이스 모델 | meta-llama/Meta-Llama-3.1-8B-Instruct |
+| 프레임워크 | unsloth + trl SFTTrainer |
+| 양자화 | 4-bit QLoRA (NF4) |
+| LoRA rank / alpha | 32 / 32 |
+| Epochs | 3 |
+| Learning rate | 3e-5 (cosine, warmup 5%) |
+| Optimizer | adamw_8bit |
+| Max length | 1536 |
+| 점수 척도 | 1~4점 (인접 정확도 87.5%, Macro F1 0.5348) |
+| 허브 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
 
 ## 브랜치 전략
 
@@ -128,7 +147,8 @@ feat/*        # 기능 개발
 - [x] 채점 / RAG 튜터 / 커리큘럼 API 구현
 - [ ] Swagger 테스트 완료
 - [ ] AWS EC2 배포
-- [ ] 글쓰기 평가 모델 (담당: 김우주)
+- [x] 글쓰기 채점 모델 학습 및 HuggingFace 업로드 (Onjeom/writing-ai) — 김우주
+- [x] 글쓰기 채점 FastAPI 서버 구현 (POST /api/writing/evaluate) — 김우주
 
 ## 참고 자료
 
