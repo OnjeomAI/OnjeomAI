@@ -66,30 +66,70 @@ onjeom/
 
 ## AI 서비스 API
 
-| 엔드포인트 | 설명 | 담당 | 우선순위 |
+| 엔드포인트 | 설명 | 담당 | 상태 |
 |---|---|---|---|
-| `POST /api/grading/grade` | 키워드 매칭 + LLM 2단계 자동 채점 | 이성진 | 필수 |
-| `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 이성진 | 필수 |
-| `POST /api/tutor/explain` | 용어/문장 쉬운 설명 | 이성진 | 필수 |
-| `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 필수 |
-| `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 필수 |
-| `POST /api/writing/evaluate` | 서술형 답안 자동 채점 + 피드백 | 김우주 | 필수 |
-| `GET /health` | 서버 상태 확인 | - | - |
+| `POST /api/grading/grade` | 키워드 매칭 + LLM 2단계 자동 채점 | 이성진 | 구현 완료 |
+| `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 이성진 | 구현 완료 |
+| `POST /api/tutor/explain` | 용어·문장 쉬운 설명 | 이성진 | 구현 완료 |
+| `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 구현 완료 |
+| `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 구현 완료 |
+| `POST /api/writing/evaluate` | 서술형 답안 자동 채점 + 피드백 | 김우주 | 구현 완료 |
+| `GET /health` | 서버 상태 확인 | - | 구현 완료 |
 
 자세한 테스트 방법 → [`api/README.md`](./api/README.md)
 
-### POST /api/writing/evaluate 상세
+### POST /api/writing/evaluate
 
-1단계 키워드 매칭 → 2단계 LLM 채점 → 점수 구간별 피드백 → 심층 분석(50점 미만)
+서술형 답안을 받아 1단계 키워드 매칭 → 2단계 LLM 채점 순서로 자동 채점합니다.
 
-| 응답 필드 | 설명 |
-|---|---|
-| `final_score` | 최종 점수 0~100 (키워드 40% + LLM 60%) |
-| `feedback_type` | `EXCELLENT` / `GOOD` / `NEEDS_IMPROVEMENT` |
-| `score_feedback` | 점수 구간별 안내 메시지 |
-| `matched_keywords` | 포함된 키워드 목록 (프론트 초록 하이라이트용) |
-| `missing_keywords` | 누락된 키워드 목록 (프론트 빨강 하이라이트용) |
-| `deep_analysis` | 오류 유형 분류 + 개선 방향 (50점 미만 시에만 반환) |
+**Request Body**
+
+```json
+{
+  "passage_text": "지문 텍스트",
+  "question_text": "문제 지시문",
+  "model_answer": "모범 답안",
+  "user_answer": "학생 답안 (최대 700자)",
+  "keywords": [
+    { "keyword": "핵심 키워드", "weight": 30 }
+  ]
+}
+```
+
+> `keywords` 생략 시 LLM 단독 채점으로 동작합니다.
+
+**Response Body**
+
+```json
+{
+  "keyword_score": 33,
+  "raw_score": 2,
+  "normalized_score": 50,
+  "final_score": 43,
+  "feedback": "LLM 채점 피드백 텍스트",
+  "feedback_type": "NEEDS_IMPROVEMENT",
+  "score_feedback": "이 개념부터 다시 보세요. 관련 학습 콘텐츠를 추천해드릴게요.",
+  "matched_keywords": ["줄기"],
+  "missing_keywords": ["수분", "가시"],
+  "deep_analysis": {
+    "error_types": ["내용 누락", "어휘 부족"],
+    "analysis": "오류 원인 상세 분석",
+    "improvement": "구체적 개선 방향"
+  }
+}
+```
+
+| 응답 필드 | 타입 | 설명 |
+|---|---|---|
+| `keyword_score` | int \| null | 1단계 키워드 기반 점수 (0~100). keywords 미입력 시 null |
+| `raw_score` | int | LLM 원점수 (1~4점) |
+| `normalized_score` | int | LLM 정규화 점수 (25 / 50 / 75 / 100) |
+| `final_score` | int | **최종 점수** (키워드 40% + LLM 60%, 또는 LLM 단독) |
+| `feedback_type` | string | `EXCELLENT`(80~100) / `GOOD`(50~79) / `NEEDS_IMPROVEMENT`(0~49) |
+| `score_feedback` | string | 점수 구간별 안내 메시지 |
+| `matched_keywords` | string[] | 포함된 키워드 (프론트 초록 하이라이트용) |
+| `missing_keywords` | string[] | 누락된 키워드 (프론트 빨강 하이라이트용) |
+| `deep_analysis` | object \| null | 오류 유형 분류 + 개선 방향 (final_score < 50 시에만 반환) |
 
 ## 모델
 
@@ -115,14 +155,38 @@ onjeom/
 
 ### 글쓰기 평가 데이터 (AI Hub) — 담당: 김우주
 
+- **총 규모**: 64,017건 (세 데이터셋 혼합 학습)
 - **라이선스**: AI Hub 이용약관 (재배포 불가, 직접 다운로드 필요)
-- 세 데이터셋을 혼합하여 학습에 활용
 
-| 데이터셋 | 설명 |
+**논술형 글쓰기 평가 데이터** (소계: 16,010건)  
+주제에 대한 논리적 주장·근거 서술 평가
+
+| 학교급/학년 | 수량 |
 |---|---|
-| 논술형 글쓰기 평가 데이터 | 주제에 대한 논리적 주장 및 근거 서술 평가 |
-| 서술형 글쓰기 평가 데이터 | 지문 기반 내용 파악 및 서술형 답안 평가 |
-| 주제별 글쓰기 평가 데이터 | 특정 주제에 대한 자유 글쓰기 평가 |
+| 초등학교 5학년 | 3,932 |
+| 초등학교 6학년 | 3,151 |
+| 중학교 1학년 | 3,856 |
+| 중학교 2학년 | 2,173 |
+| 중학교 3학년 | 2,898 |
+
+**서술형 글쓰기 평가 데이터** (소계: 32,006건)  
+지문 기반 내용 파악 및 서술형 답안 평가
+
+| 학교급/학년 | 수량 |
+|---|---|
+| 초등학교 5학년 | 7,451 |
+| 초등학교 6학년 | 7,096 |
+| 중학교 1학년 | 6,111 |
+| 중학교 2학년 | 6,042 |
+| 중학교 3학년 | 5,306 |
+
+**주제별 글쓰기 평가 데이터** (소계: 16,001건)  
+특정 주제에 대한 자유 글쓰기 평가
+
+| 연령대 | 수량 |
+|---|---|
+| 20~30대 | 7,994 |
+| 40대 이상 | 8,007 |
 
 ## 모델 학습 설정
 
