@@ -1,11 +1,14 @@
 from app.core.model_loader import get_writing_evaluator
 from app.schemas.writing import (
     COMPETENCY_KO,
+    AvailableProblem,
     Competency,
     CompareAnswersRequest,
     CompareAnswersResponse,
     CurriculumAdjustRequest,
     CurriculumAdjustResponse,
+    CurriculumPlanRequest,
+    CurriculumPlanResponse,
     DeepAnalysis,
     ErrorType,
     FeedbackType,
@@ -218,6 +221,66 @@ def compare_answers(req: CompareAnswersRequest) -> CompareAnswersResponse:
 # ── 약점 분석 리포트 ──────────────────────────────────────────────────────────
 
 _LEVEL_LABELS = {True: "취약", False: "보통"}  # True = score < 50
+
+# 역량명 → ReadingType 매핑 (대소문자 무관)
+_COMPETENCY_TO_READING_TYPE = {
+    "factual": "FACTUAL",
+    "inferential": "INFERENTIAL",
+    "critical": "CRITICAL",
+}
+
+
+# ── 커리큘럼 플랜 ──────────────────────────────────────────────────────────────
+
+def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanResponse:
+    """
+    theta 기반 스테이지 결정 후 취약 역량 reading_type 우선 배치.
+    - 스테이지별 배정 문제 수: daily_goal × 7
+    """
+    theta = req.theta
+    if theta < -0.5:
+        stages = [1]
+    elif theta < 0.0:
+        stages = [1, 2]
+    elif theta < 0.5:
+        stages = [2, 3]
+    else:
+        stages = [3, 4]
+
+    # stage → 적합 difficulty 범위
+    _stage_diffs: dict[int, list[int]] = {
+        1: [1, 2],
+        2: [2, 3],
+        3: [3, 4],
+        4: [4, 5],
+    }
+
+    # 취약 역량(50점 미만)에 대응하는 reading_type 집합
+    weak_types: set[str] = {
+        _COMPETENCY_TO_READING_TYPE[comp.lower()]
+        for comp, score in req.competency_scores.items()
+        if score < 50 and comp.lower() in _COMPETENCY_TO_READING_TYPE
+    }
+
+    # difficulty → 문제 목록 색인
+    by_diff: dict[int, list[AvailableProblem]] = {}
+    for p in req.available_problems:
+        by_diff.setdefault(p.difficulty, []).append(p)
+
+    per_stage = req.daily_goal * 7
+    plan: dict[int, list[int]] = {}
+
+    for stage in stages:
+        candidates: list[AvailableProblem] = []
+        for d in _stage_diffs.get(stage, [stage]):
+            candidates.extend(by_diff.get(d, []))
+
+        priority = [p for p in candidates if p.reading_type.upper() in weak_types]
+        others = [p for p in candidates if p.reading_type.upper() not in weak_types]
+        selected = (priority + others)[:per_stage]
+        plan[stage] = [p.id for p in selected]
+
+    return CurriculumPlanResponse(plan=plan)
 
 
 def generate_weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:

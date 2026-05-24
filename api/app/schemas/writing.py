@@ -166,3 +166,28 @@ class IrtEstimateResponse(BaseModel):
     se: float = Field(..., description="추정 표준오차")
     ability_level: str = Field(..., description="능력 수준 (하/중하/중/중상/상)")
     next_difficulty: int = Field(..., ge=1, le=5, description="권장 다음 문제 난이도 (1~5)")
+
+
+# ── POST /api/writing/curriculum-plan ────────────────────────────────────────
+
+class AvailableProblem(BaseModel):
+    id: int = Field(..., description="문제 ID")
+    difficulty: int = Field(..., ge=1, le=5, description="문제 난이도 (1~5)")
+    reading_type: str = Field(..., description="독해 유형 (FACTUAL/INFERENTIAL/CRITICAL/CREATIVE)")
+
+
+class CurriculumPlanRequest(BaseModel):
+    theta: float = Field(..., description="IRT 능력 추정치")
+    daily_goal: int = Field(..., ge=1, description="일일 목표 문제 수")
+    competency_scores: dict[str, int] = Field(
+        ..., description="역량별 점수 {역량명: 점수(0~100)}"
+    )
+    available_problems: list[AvailableProblem] = Field(
+        ..., description="배정 가능한 전체 문제 목록"
+    )
+
+
+class CurriculumPlanResponse(BaseModel):
+    plan: dict[int, list[int]] = Field(
+        ..., description="스테이지별 문제 ID 목록 {stage: [problemId, ...]}"
+    )

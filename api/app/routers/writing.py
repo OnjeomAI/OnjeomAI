@@ -5,6 +5,8 @@ from app.schemas.writing import (
     CompareAnswersResponse,
     CurriculumAdjustRequest,
     CurriculumAdjustResponse,
+    CurriculumPlanRequest,
+    CurriculumPlanResponse,
     IrtEstimateRequest,
     IrtEstimateResponse,
     WeaknessReportRequest,
@@ -17,6 +19,7 @@ from app.services.writing_service import (
     adjust_curriculum,
     compare_answers,
     evaluate_writing,
+    generate_curriculum_plan,
     generate_weakness_report,
 )
 
@@ -101,6 +104,27 @@ def weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
     """
     try:
         return generate_weakness_report(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/curriculum-plan",
+    response_model=CurriculumPlanResponse,
+    summary="커리큘럼 플랜 생성",
+)
+def curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanResponse:
+    """
+    theta 기반 스테이지를 결정하고 취약 역량(50점 미만) reading_type 문제를 우선 배치합니다.
+
+    - theta < -0.5 → 스테이지 [1]
+    - -0.5 ≤ theta < 0.0 → 스테이지 [1, 2]
+    - 0.0 ≤ theta < 0.5 → 스테이지 [2, 3]
+    - theta ≥ 0.5 → 스테이지 [3, 4]
+    - 스테이지별 배정 문제 수: daily_goal × 7
+    """
+    try:
+        return generate_curriculum_plan(req)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
