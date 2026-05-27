@@ -79,6 +79,7 @@ onjeom/
 | `POST /api/writing/compare` | 이전·현재 답변 비교 및 성장 메시지 생성 | 김우주 | 구현 완료 |
 | `POST /api/writing/weakness-report` | 역량별 약점 분석 리포트 생성 | 김우주 | 구현 완료 |
 | `POST /api/writing/irt/estimate` | IRT 3PL 기반 학생 능력 수준 추정 (1PL 폴백 포함) | 김우주 | 구현 완료 |
+| `POST /api/writing/curriculum-plan` | theta 기반 스테이지 결정 + 취약 역량 우선 문제 배치 | 김우주 | 구현 완료 |
 | `GET /health` | 서버 상태 확인 | - | 구현 완료 |
 
 자세한 테스트 방법 → [`api/README.md`](./api/README.md)
@@ -311,6 +312,64 @@ onjeom/
 
 ---
 
+### POST /api/writing/curriculum-plan
+
+IRT 능력 추정치(theta)를 기반으로 스테이지를 결정하고, 취약 역량(50점 미만) reading_type 문제를 우선 배치하여 주간 커리큘럼 플랜을 생성합니다.
+
+**theta → 스테이지 매핑**
+
+| theta 범위 | 스테이지 |
+|---|---|
+| θ < −0.5 | [1] |
+| −0.5 ≤ θ < 0.0 | [1, 2] |
+| 0.0 ≤ θ < 0.5 | [2, 3] |
+| θ ≥ 0.5 | [3, 4] |
+
+> 스테이지별 배정 문제 수: `daily_goal × 7`
+
+**Request Body**
+
+```json
+{
+  "theta": -0.21,
+  "daily_goal": 3,
+  "competency_scores": {
+    "FACTUAL": 80,
+    "INFERENTIAL": 42,
+    "CRITICAL": 65,
+    "CREATIVE": 55
+  },
+  "available_problems": [
+    { "id": 101, "difficulty": 2, "reading_type": "INFERENTIAL" },
+    { "id": 102, "difficulty": 1, "reading_type": "FACTUAL" }
+  ]
+}
+```
+
+| 요청 필드 | 타입 | 설명 |
+|---|---|---|
+| `theta` | float | IRT 능력 추정치 |
+| `daily_goal` | int | 일일 목표 문제 수 (≥ 1) |
+| `competency_scores` | object | 역량별 점수 `{역량명: 점수(0~100)}` |
+| `available_problems` | object[] | 배정 가능한 전체 문제 목록 |
+
+**Response Body**
+
+```json
+{
+  "plan": {
+    "1": [101, 105, 108],
+    "2": [102, 106, 109]
+  }
+}
+```
+
+| 응답 필드 | 타입 | 설명 |
+|---|---|---|
+| `plan` | object | 스테이지별 문제 ID 목록 `{stage: [problemId, ...]}` |
+
+---
+
 ## 모델
 
 | 모델 | 베이스 | 담당 | 허브 |
@@ -455,6 +514,10 @@ feat/*        # 기능 개발
   - [x] `DiagnosticService.calculateTheta()` → IRT API 호출로 교체 (TODO 완료)
   - [x] 진단 완료 시 문제별 a/b/c 파라미터 포함하여 AI API 전달
   - [x] `Problem` 엔티티에 `aParam` / `bParam` / `cParam` nullable 컬럼 추가 (3PL 준비)
+- [x] 커리큘럼 플랜 생성 API 구현 (POST /api/writing/curriculum-plan)
+  - [x] theta 기반 스테이지 결정 (4구간)
+  - [x] 취약 역량(50점 미만) reading_type 문제 우선 배치
+  - [x] 스테이지별 `daily_goal × 7` 문제 배정
 
 ## 참고 자료
 
