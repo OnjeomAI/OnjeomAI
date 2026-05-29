@@ -6,7 +6,7 @@ class IndexRequest(BaseModel):
     passage: str
     question: str
     model_answer: str
-    keywords: list[str]
+    keywords: list[str] = []
 
 
 class IndexResponse(BaseModel):
