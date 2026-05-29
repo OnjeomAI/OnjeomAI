@@ -73,6 +73,7 @@ onjeom/
 | `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 이성진 | 구현 완료 |
 | `POST /api/tutor/explain` | 용어·문장 쉬운 설명 | 이성진 | 구현 완료 |
 | `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 구현 완료 |
+| `POST /api/problems/generate` | AI 문제 자동 생성 (지문+질문+모범답안) | 이성진 | 구현 완료 |
 | `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 구현 완료 |
 | `POST /api/writing/evaluate` | 서술형 답안 자동 채점 + 피드백 | 김우주 | 구현 완료 |
 | `POST /api/writing/curriculum/adjust` | 취약 역량 기반 동적 학습 경로 재조정 | 김우주 | 구현 완료 |
