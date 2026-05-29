@@ -13,10 +13,11 @@ class GradingService:
         stage1_score, missing_keywords, found_keywords = self._keyword_grade(
             student_answer, keywords
         )
-        final_score, feedback, reason = self._llm_grade(
+        final_score, reason = self._llm_grade(
             passage, question, model_answer, student_answer,
             stage1_score, missing_keywords,
         )
+        feedback = self._score_based_feedback(final_score, missing_keywords)
         return {
             "score": final_score,
             "stage1_score": stage1_score,
@@ -41,10 +42,20 @@ class GradingService:
         score = int((earned_weight / total_weight) * 100) if total_weight > 0 else 50
         return score, missing, found
 
+    def _score_based_feedback(self, score: int, missing: list) -> str:
+        if score >= 80:
+            return "핵심을 잘 파악했어요! 심화 학습을 추천해요."
+        elif score >= 50:
+            missing_str = ", ".join(f'"{k["keyword"]}"' for k in missing)
+            return f"방향은 맞지만 {missing_str} 부분이 빠졌어요."
+        else:
+            missing_str = ", ".join(f'"{k["keyword"]}"' for k in missing)
+            return f"이 개념부터 다시 보세요. 누락된 키워드: {missing_str}"
+
     def _llm_grade(
         self, passage, question, model_answer, student_answer,
         stage1_score, missing_keywords,
-    ) -> tuple[int, str, str]:
+    ) -> tuple[int, str]:
         missing_str = ", ".join(f'"{k["keyword"]}"' for k in missing_keywords) or "없음"
 
         prompt = f"""다음 주관식 문제의 학습자 답변을 채점해주세요.
@@ -66,8 +77,7 @@ class GradingService:
 
 문맥과 논리 흐름을 고려해 최종 점수를 조정하고 아래 형식으로만 답하세요.
 최종점수: [숫자]
-채점근거: [근거]
-피드백: [피드백]"""
+채점근거: [근거]"""
 
         messages = [
             {"role": "system", "content": "당신은 국어 독해 채점 전문 AI입니다."},
@@ -76,8 +86,8 @@ class GradingService:
         output = model_manager.generate(messages, max_new_tokens=256)
         return self._parse_output(output, stage1_score)
 
-    def _parse_output(self, output: str, fallback: int) -> tuple[int, str, str]:
-        score, reason, feedback = fallback, "", ""
+    def _parse_output(self, output: str, fallback: int) -> tuple[int, str]:
+        score, reason = fallback, ""
         for line in output.split("\n"):
             if line.startswith("최종점수:"):
                 try:
@@ -86,9 +96,7 @@ class GradingService:
                     pass
             elif line.startswith("채점근거:"):
                 reason = line.replace("채점근거:", "").strip()
-            elif line.startswith("피드백:"):
-                feedback = line.replace("피드백:", "").strip()
-        return score, feedback, reason
+        return score, reason
 
 
 grading_service = GradingService()
