@@ -20,4 +20,3 @@ class GradeResponse(BaseModel):
     found_keywords: list[str]
     missing_keywords: list[Keyword]
     feedback: str
-    grade_reason: str
