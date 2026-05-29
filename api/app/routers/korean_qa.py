@@ -47,7 +47,10 @@ def ask_tutor(req: TutorRequest):
 
 @router.post("/tutor/explain", response_model=ExplainResponse)
 def explain_term(req: ExplainRequest):
-    context_block = f"\n\n[문맥]\n{req.context}" if req.context else ""
+    results = rag_service.search(req.term)
+    rag_context = "\n\n".join(r["text"] for r in results)
+    combined_context = req.context or rag_context
+    context_block = f"\n\n[참고 자료]\n{combined_context}" if combined_context else ""
     prompt = f"""중학생도 이해할 수 있게 쉽게 설명해주세요.{context_block}
 
 [설명 요청]
