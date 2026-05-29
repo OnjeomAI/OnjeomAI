@@ -12,6 +12,7 @@
 | `app/services/grading_service.py` | 이성진 |
 | `app/services/rag_service.py` | 이성진 |
 | `app/services/curriculum_service.py` | 이성진 |
+| `app/services/problem_service.py` | 이성진 |
 | `app/routers/writing.py` | 김우주 |
 | `app/services/writing_service.py` | 김우주 |
 | `app/main.py`, `app/core/`, `app/schemas/` | 공통 |
@@ -84,7 +85,7 @@ SKIP_MODEL_LOAD=1 uvicorn app.main:app --reload
 }
 ```
 
-응답: `score`, `stage1_score`, `found_keywords`, `missing_keywords`, `feedback`, `grade_reason`
+응답: `score`, `stage1_score`, `found_keywords`, `missing_keywords`, `feedback`
 
 ---
 
@@ -132,7 +133,27 @@ SKIP_MODEL_LOAD=1 uvicorn app.main:app --reload
 
 ---
 
-### 5. 콘텐츠 벡터 인덱싱 (담당: 이성진)
+### 5. AI 문제 자동 생성 (담당: 이성진)
+
+**엔드포인트**: `POST /api/problems/generate`
+
+```json
+{
+  "difficulty": 3,
+  "reading_type": "FACTUAL",
+  "topic": "환경 오염"
+}
+```
+
+> `difficulty`: 1(초등) ~ 5(고등 심화)  
+> `reading_type`: `FACTUAL` / `INFERENTIAL` / `CRITICAL` / `CREATIVE`  
+> `topic`: 선택값, null이면 자유 주제로 생성
+
+응답: `passage_text`, `question_text`, `model_answer`, `reading_type`, `difficulty`
+
+---
+
+### 6. 콘텐츠 벡터 인덱싱 (담당: 이성진)
 
 **엔드포인트**: `POST /api/indexing/index`
 
@@ -148,7 +169,7 @@ SKIP_MODEL_LOAD=1 uvicorn app.main:app --reload
 
 ---
 
-### 6. 헬스 체크
+### 7. 헬스 체크
 
 **엔드포인트**: `GET /health`  →  `{"status": "ok"}`
 
@@ -170,6 +191,7 @@ api/
 │   │   ├── grading_service.py       # 채점 로직 (이성진)
 │   │   ├── rag_service.py           # RAG 파이프라인 (이성진)
 │   │   ├── curriculum_service.py    # 커리큘럼 생성 (이성진)
+│   │   ├── problem_service.py       # AI 문제 생성 (이성진)
 │   │   └── writing_service.py       # 글쓰기 평가 로직 (김우주)
 │   └── schemas/                     # 요청/응답 타입 (공통)
 ├── models/                          # LoRA 어댑터 (gitignore)

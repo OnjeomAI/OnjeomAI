@@ -4,9 +4,11 @@ from app.schemas.grading import GradeRequest, GradeResponse
 from app.schemas.tutor import TutorRequest, TutorResponse, ExplainRequest, ExplainResponse
 from app.schemas.curriculum import CurriculumRequest, CurriculumResponse
 from app.schemas.indexing import IndexRequest, IndexResponse
+from app.schemas.problem import ProblemGenerateRequest, ProblemGenerateResponse
 from app.services.grading_service import grading_service
 from app.services.rag_service import rag_service
 from app.services.curriculum_service import curriculum_service
+from app.services.problem_service import problem_service
 from app.core.model import model_manager
 
 router = APIRouter(tags=["korean_qa"])
@@ -71,6 +73,16 @@ def generate_curriculum(req: CurriculumRequest):
         theta=req.theta,
         daily_goal=req.daily_goal,
         weak_areas=req.weak_areas,
+    )
+
+
+# ── 문제 생성 ─────────────────────────────────────────────────────
+@router.post("/problems/generate", response_model=ProblemGenerateResponse)
+def generate_problem(req: ProblemGenerateRequest):
+    return problem_service.generate(
+        difficulty=req.difficulty,
+        reading_type=req.reading_type,
+        topic=req.topic,
     )
 
 

@@ -70,6 +70,7 @@ onjeom/
 | `POST /api/tutor/ask` | RAG 기반 AI 튜터 질문 답변 | 이성진 | 필수 |
 | `POST /api/tutor/explain` | 용어/문장 쉬운 설명 | 이성진 | 필수 |
 | `POST /api/curriculum/generate` | 진단 결과 기반 커리큘럼 생성 | 이성진 | 필수 |
+| `POST /api/problems/generate` | AI 문제 자동 생성 (지문+질문+모범답안) | 이성진 | 필수 |
 | `POST /api/indexing/index` | 콘텐츠 벡터 인덱싱 | 이성진 | 필수 |
 | `POST /api/writing/evaluate` | 글쓰기 평가 | 김우주 | 필수 |
 | `GET /health` | 서버 상태 확인 | - | - |
@@ -126,7 +127,8 @@ feat/*        # 기능 개발
 - [x] HuggingFace 모델 업로드 (Onjeom/korean_qa)
 - [x] FastAPI AI 서비스 구조 구축
 - [x] 채점 / RAG 튜터 / 커리큘럼 API 구현
-- [ ] Swagger 테스트 완료
+- [x] AI 문제 자동 생성 API 구현
+- [x] Swagger 테스트 완료
 - [ ] AWS EC2 배포
 - [ ] 글쓰기 평가 모델 (담당: 김우주)
 
