@@ -1,7 +1,7 @@
-version: "3.8"
+version: "3.9"
 
 services:
-  ai-service:
+  ai-api:
     build: .
     ports:
       - "8000:8000"
@@ -17,3 +17,4 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    restart: unless-stopped
