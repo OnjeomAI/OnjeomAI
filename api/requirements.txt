@@ -1,10 +1,19 @@
-fastapi
-uvicorn[standard]
-pydantic-settings
-torch
-transformers
-peft
-accelerate
-bitsandbytes
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# ML (공통)
+torch==2.4.0
+transformers==4.44.2
+peft==0.13.0
+accelerate==0.34.2
+bitsandbytes==0.43.3
+
+# Writing 평가 모델 (김우주)
+unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+trl==0.11.1
+
+# Korean QA (이성진)
 chromadb
 sentence-transformers
