@@ -53,13 +53,20 @@ def get_writing_evaluator() -> WritingEvaluator:
                 max_seq_length=settings.writing_max_seq_length,
             )
         else:
-            local_path = _ensure_model_downloaded(
-                repo_id=settings.writing_model_name,
-                local_dir=_MODEL_LOCAL_DIR,
-            )
-            _writing_evaluator = WritingEvaluator(
-                model_name=local_path,
-                max_seq_length=settings.writing_max_seq_length,
-            )
-            _writing_evaluator._load()
+            try:
+                local_path = _ensure_model_downloaded(
+                    repo_id=settings.writing_model_name,
+                    local_dir=_MODEL_LOCAL_DIR,
+                )
+                _writing_evaluator = WritingEvaluator(
+                    model_name=local_path,
+                    max_seq_length=settings.writing_max_seq_length,
+                )
+                _writing_evaluator._load()
+            except ModuleNotFoundError as e:
+                print(f"[model_loader] Writing 모델 로드 실패 ({e}) → Mock으로 대체")
+                _writing_evaluator = _MockWritingEvaluator(
+                    model_name=settings.writing_model_name,
+                    max_seq_length=settings.writing_max_seq_length,
+                )
     return _writing_evaluator
