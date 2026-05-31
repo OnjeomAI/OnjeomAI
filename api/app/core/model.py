@@ -50,6 +50,10 @@ class ModelManager:
         self._model = PeftModel.from_pretrained(base_model, adapter_path)
         self._model.eval()
 
+    @property
+    def is_loaded(self) -> bool:
+        return self._model is not None
+
     def generate(self, messages: list, max_new_tokens: int = 512) -> str:
         text = self._tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True

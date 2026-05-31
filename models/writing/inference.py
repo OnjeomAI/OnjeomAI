@@ -228,6 +228,23 @@ class WritingEvaluator:
             "analysis": data.get("analysis", response),
         }
 
+    # ── 용어/문장 설명 ────────────────────────────────────────────────────────
+
+    def explain(self, term: str, passage_text: str | None = None) -> str:
+        self._load()
+        if passage_text:
+            prompt = (
+                f"다음 지문을 참고하여 '{term}'을(를) 중학생도 이해할 수 있는 쉬운 말로 2~3문장으로 설명해.\n\n"
+                f"[지문]\n{passage_text[:500]}\n\n"
+                f"설명:"
+            )
+        else:
+            prompt = (
+                f"'{term}'을(를) 중학생도 이해할 수 있는 쉬운 말로 2~3문장으로 설명해.\n\n"
+                f"설명:"
+            )
+        return self._generate(prompt, max_new_tokens=200).strip()
+
     # ── 약점 분석 리포트 ──────────────────────────────────────────────────────
 
     def weakness_report(self, competency_scores: dict[str, int]) -> dict:

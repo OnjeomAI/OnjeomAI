@@ -96,4 +96,4 @@ def index_content(req: IndexRequest, background_tasks: BackgroundTasks):
         question=req.question,
         answer=req.model_answer,
     )
-    return IndexResponse(status="indexing", content_id=req.content_id, chunks_indexed=0)
+    return IndexResponse(status="queued", content_id=req.content_id, chunks_indexed=0)

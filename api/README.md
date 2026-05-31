@@ -129,25 +129,61 @@ api/
 
 ## Kaggle 배포
 
+> GPU T4 x2, 인터넷 연결 ON
+
+**셀 1 — 패키지 설치** (먼저 실행 후 완료 확인)
+
 ```python
-import os, subprocess
+!pip install -q fastapi uvicorn pyngrok pydantic-settings chromadb sentence-transformers peft accelerate bitsandbytes trl
+!pip install -q "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
+```
+
+**셀 2 — 서버 실행**
+
+```python
+import os
+import threading
+import subprocess
+import time
+import requests
 from pyngrok import ngrok
 
-# 1. 레포 클론
+os.chdir("/kaggle/working")
+os.system("rm -rf /kaggle/working/OnjeomAI")
 os.system("git clone -b develop https://github.com/OnjeomAI/OnjeomAI.git /kaggle/working/OnjeomAI")
-os.makedirs("/kaggle/working/OnjeomAI/api/chroma_db", exist_ok=True)
+
 os.chdir("/kaggle/working/OnjeomAI/api")
+os.makedirs("./chroma_db", exist_ok=True)
 
-# 2. 패키지 설치
-os.system("pip install -r requirements.txt -q")
+os.environ.pop("SKIP_MODEL_LOAD", None)
+os.environ["BASE_MODEL"]      = "Qwen/Qwen2.5-3B-Instruct"
+os.environ["ADAPTER_PATH"]    = "./models/korean_qa"
+os.environ["CHROMA_PATH"]     = "./chroma_db"
+os.environ["EMBEDDING_MODEL"] = "jhgan/ko-sroberta-multitask"
 
-# 3. ngrok 터널
+os.system("fuser -k 8000/tcp 2>/dev/null || true")
+time.sleep(2)
+
+def run_server():
+    subprocess.run(["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"])
+
+threading.Thread(target=run_server, daemon=True).start()
+
+# Qwen2.5-3B + Llama-3.1-8B 두 모델 로드 → 최대 10분 대기
+print("모델 로딩 중... (최대 10분)")
+for i in range(60):
+    time.sleep(10)
+    try:
+        r = requests.get("http://localhost:8000/health", timeout=3)
+        if r.status_code == 200:
+            print(f"서버 준비 완료! ({(i + 1) * 10}초)")
+            break
+    except Exception:
+        print(f"대기 중... {(i + 1) * 10}초")
+
 ngrok.set_auth_token("YOUR_NGROK_TOKEN")
 tunnel = ngrok.connect(8000)
 print("AI 서버 URL:", tunnel.public_url)
-
-# 4. 서버 실행
-subprocess.Popen(["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"])
 ```
 
 ---
