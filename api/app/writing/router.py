@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.writing import (
+from app.writing.schemas.writing import (
     CompareAnswersRequest,
     CompareAnswersResponse,
     CurriculumAdjustRequest,
@@ -14,7 +14,7 @@ from app.schemas.writing import (
     WritingEvaluateRequest,
     WritingEvaluateResponse,
 )
-from app.services.writing_service import (
+from app.writing.services.writing_service import (
     adjust_curriculum,
     compare_answers,
     evaluate_writing,

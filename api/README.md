@@ -1,21 +1,16 @@
 # 온점 AI Service
 
-국어 독해 채점 · AI 튜터 · 커리큘럼 생성 API 서버입니다.
+국어 독해 채점 · AI 튜터 · 커리큘럼 생성 · 글쓰기 평가 API 서버입니다.
 
 ---
 
 ## 담당
 
-| 파일 | 담당 |
-|---|---|
-| `app/routers/korean_qa.py` | 이성진 |
-| `app/services/grading_service.py` | 이성진 |
-| `app/services/rag_service.py` | 이성진 |
-| `app/services/curriculum_service.py` | 이성진 |
-| `app/services/problem_service.py` | 이성진 |
-| `app/routers/writing.py` | 김우주 |
-| `app/services/writing_service.py` | 김우주 |
-| `app/main.py`, `app/core/`, `app/schemas/` | 공통 |
+| 도메인 | 파일 | 담당 |
+|--------|------|------|
+| korean_qa | `app/korean_qa/` | 이성진 |
+| writing | `app/writing/` | 김우주 |
+| 공통 | `app/main.py`, `app/core/` | 공통 |
 
 ---
 
@@ -40,15 +35,17 @@ cp .env.example .env
 ### 2. 서버 실행
 
 ```bash
-# 모델 포함 정상 실행
+# 전체 모델 로딩 (GPU 필요, 1~2분 소요)
 uvicorn app.main:app --reload
 
-# 빠른 재시작 (라우터/스키마 수정 시, 모델 로딩 생략)
+# 모델 없이 빠른 테스트 (키워드 채점만 동작)
 SKIP_MODEL_LOAD=1 uvicorn app.main:app --reload
+
+# writing 모델만 mock으로 (korean_qa 모델은 실제 로딩)
+MOCK_MODEL=true uvicorn app.main:app --reload
 ```
 
-처음 실행 시 모델 자동 다운로드 (약 5~10분 소요).  
-`모델 로딩 완료!` 메시지가 뜨면 준비된 거예요.
+`모델 로딩 완료!` 메시지가 뜨면 준비 완료.
 
 ### 3. API 문서 확인
 
@@ -56,122 +53,36 @@ SKIP_MODEL_LOAD=1 uvicorn app.main:app --reload
 
 ---
 
-## API 테스트
+## API 엔드포인트
 
-### 공통 방법
+### Korean QA (이성진)
 
-1. `http://localhost:8000/docs` 접속
-2. 테스트할 엔드포인트 클릭
-3. **Try it out** 버튼 클릭
-4. 예시 데이터 붙여넣고 **Execute** 클릭
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/grading/grade` | 주관식 답변 2단계 채점 |
+| POST | `/api/tutor/ask` | RAG 기반 AI 튜터 질문 |
+| POST | `/api/tutor/explain` | 용어/문장 쉬운 설명 |
+| POST | `/api/curriculum/generate` | 맞춤형 커리큘럼 생성 |
+| POST | `/api/problems/generate` | AI 문제 자동 생성 |
+| POST | `/api/indexing/index` | 벡터 임베딩 인덱싱 |
 
----
+### Writing (김우주)
 
-### 1. 주관식 자동 채점 (담당: 이성진)
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/writing/evaluate` | 서술형 답안 자동 채점 |
+| POST | `/api/writing/curriculum/adjust` | 동적 학습 경로 재조정 |
+| POST | `/api/writing/compare` | 이전·현재 답변 변화 추적 |
+| POST | `/api/writing/weakness-report` | 역량별 약점 분석 리포트 |
+| POST | `/api/writing/curriculum-plan` | theta 기반 커리큘럼 플랜 |
+| POST | `/api/writing/explain-term` | 용어/문장 쉬운 설명 |
+| POST | `/api/writing/irt/estimate` | IRT 3PL 학생 능력 추정 |
 
-**엔드포인트**: `POST /api/grading/grade`
+### 공통
 
-```json
-{
-  "passage": "사막은 강수량이 매우 적은 지역으로, 일교차가 크고 식물이 거의 자라지 않는다. 선인장은 두꺼운 줄기에 수분을 저장하여 이런 환경에 적응했다.",
-  "question": "선인장이 사막 환경에서 살아남을 수 있는 이유를 서술하시오.",
-  "model_answer": "선인장은 두꺼운 줄기에 수분을 저장하는 구조를 가지고 있어 강수량이 적은 사막에서도 생존할 수 있다.",
-  "keywords": [
-    {"keyword": "수분 저장", "weight": 50},
-    {"keyword": "두꺼운 줄기", "weight": 30},
-    {"keyword": "사막", "weight": 20}
-  ],
-  "student_answer": "선인장은 줄기에 물을 저장해서 사막에서 살 수 있다."
-}
-```
-
-응답: `score`, `stage1_score`, `found_keywords`, `missing_keywords`, `feedback`
-
----
-
-### 2. AI 튜터 질문 (담당: 이성진)
-
-**엔드포인트**: `POST /api/tutor/ask`
-
-```json
-{
-  "question": "추론적 독해란 무엇인가요?",
-  "context": null
-}
-```
-
-> 콘텐츠 인덱싱 후에는 해당 지문 기반으로 답변합니다.
-
----
-
-### 3. 용어 설명 (담당: 이성진)
-
-**엔드포인트**: `POST /api/tutor/explain`
-
-```json
-{
-  "term": "역설법",
-  "context": "글쓴이는 역설법을 사용하여 주제를 강조했다."
-}
-```
-
----
-
-### 4. 커리큘럼 생성 (담당: 이성진)
-
-**엔드포인트**: `POST /api/curriculum/generate`
-
-```json
-{
-  "theta": -0.5,
-  "daily_goal": 10,
-  "weak_areas": ["추론적 이해", "비판적 독해"]
-}
-```
-
-> `theta`: IRT 능력 추정치 (-3 ~ 3), 낮을수록 초급
-
----
-
-### 5. AI 문제 자동 생성 (담당: 이성진)
-
-**엔드포인트**: `POST /api/problems/generate`
-
-```json
-{
-  "difficulty": 3,
-  "reading_type": "FACTUAL",
-  "topic": "환경 오염"
-}
-```
-
-> `difficulty`: 1(초등) ~ 5(고등 심화)  
-> `reading_type`: `FACTUAL` / `INFERENTIAL` / `CRITICAL` / `CREATIVE`  
-> `topic`: 선택값, null이면 자유 주제로 생성
-
-응답: `passage_text`, `question_text`, `model_answer`, `reading_type`, `difficulty`
-
----
-
-### 6. 콘텐츠 벡터 인덱싱 (담당: 이성진)
-
-**엔드포인트**: `POST /api/indexing/index`
-
-```json
-{
-  "content_id": "test-001",
-  "passage": "사막은 강수량이 매우 적은 지역으로...",
-  "question": "선인장이 사막 환경에서 살아남을 수 있는 이유를 서술하시오.",
-  "model_answer": "선인장은 두꺼운 줄기에 수분을 저장...",
-  "keywords": ["수분 저장", "두꺼운 줄기", "사막"]
-}
-```
-
----
-
-### 7. 헬스 체크
-
-**엔드포인트**: `GET /health`  →  `{"status": "ok"}`
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/health` | 헬스체크 |
 
 ---
 
@@ -180,27 +91,68 @@ SKIP_MODEL_LOAD=1 uvicorn app.main:app --reload
 ```
 api/
 ├── app/
-│   ├── main.py                      # FastAPI 진입점 (공통)
+│   ├── main.py                  # FastAPI 진입점
 │   ├── core/
-│   │   ├── config.py                # 환경변수 (공통)
-│   │   └── model.py                 # Qwen 모델 로딩 (공통)
-│   ├── routers/
-│   │   ├── korean_qa.py             # 국어 QA 라우터 (이성진)
-│   │   └── writing.py               # 글쓰기 평가 라우터 (김우주)
-│   ├── services/
-│   │   ├── grading_service.py       # 채점 로직 (이성진)
-│   │   ├── rag_service.py           # RAG 파이프라인 (이성진)
-│   │   ├── curriculum_service.py    # 커리큘럼 생성 (이성진)
-│   │   └── writing_service.py       # 글쓰기 평가 로직 (김우주)
-│   └── schemas/                     # 요청/응답 타입 (공통)
-├── models/                          # LoRA 어댑터 (gitignore)
-├── chroma_db/                       # Vector DB (gitignore)
+│   │   ├── config.py            # 환경변수 설정
+│   │   ├── model.py             # Korean QA 모델 로더 (Qwen2.5-3B)
+│   │   └── model_loader.py      # Writing 모델 로더 (Llama-3.1-8B)
+│   ├── korean_qa/               # 이성진 담당
+│   │   ├── router.py
+│   │   ├── schemas/
+│   │   │   ├── grading.py
+│   │   │   ├── tutor.py
+│   │   │   ├── curriculum.py
+│   │   │   ├── indexing.py
+│   │   │   └── problem.py
+│   │   └── services/
+│   │       ├── grading_service.py
+│   │       ├── rag_service.py
+│   │       ├── curriculum_service.py
+│   │       └── problem_service.py
+│   └── writing/                 # 김우주 담당
+│       ├── router.py
+│       ├── irt_router.py
+│       ├── schemas/
+│       │   ├── writing.py
+│       │   └── irt.py
+│       └── services/
+│           ├── writing_service.py
+│           └── irt_service.py
+├── models/                      # LoRA 어댑터 (gitignore)
+├── chroma_db/                   # Vector DB (gitignore)
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
 ```
 
-## Docker로 실행
+---
+
+## Kaggle 배포
+
+```python
+import os, subprocess
+from pyngrok import ngrok
+
+# 1. 레포 클론
+os.system("git clone -b develop https://github.com/OnjeomAI/OnjeomAI.git /kaggle/working/OnjeomAI")
+os.makedirs("/kaggle/working/OnjeomAI/api/chroma_db", exist_ok=True)
+os.chdir("/kaggle/working/OnjeomAI/api")
+
+# 2. 패키지 설치
+os.system("pip install -r requirements.txt -q")
+
+# 3. ngrok 터널
+ngrok.set_auth_token("YOUR_NGROK_TOKEN")
+tunnel = ngrok.connect(8000)
+print("AI 서버 URL:", tunnel.public_url)
+
+# 4. 서버 실행
+subprocess.Popen(["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"])
+```
+
+---
+
+## Docker 실행
 
 ```bash
 docker compose up

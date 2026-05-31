@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.irt import IrtEstimateRequest, IrtEstimateResponse
-from app.services.irt_service import estimate_theta
+from app.writing.schemas.irt import IrtEstimateRequest, IrtEstimateResponse
+from app.writing.services.irt_service import estimate_theta
 
 router = APIRouter()
 

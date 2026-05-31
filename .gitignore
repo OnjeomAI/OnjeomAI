@@ -3,6 +3,10 @@
 
 # 모델 가중치 및 학습 결과
 output/
+models/*/weights/
+*.safetensors
+*.bin
+*.pt
 
 # 원천 데이터 (저작권)
 data/Training/
