@@ -150,7 +150,7 @@ from pyngrok import ngrok
 
 os.chdir("/kaggle/working")
 os.system("rm -rf /kaggle/working/OnjeomAI")
-os.system("git clone -b develop https://github.com/OnjeomAI/OnjeomAI.git /kaggle/working/OnjeomAI")
+os.system("git clone -b main https://github.com/OnjeomAI/OnjeomAI.git /kaggle/working/OnjeomAI")
 
 os.chdir("/kaggle/working/OnjeomAI/api")
 os.makedirs("./chroma_db", exist_ok=True)
