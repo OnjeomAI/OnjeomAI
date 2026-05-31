@@ -91,7 +91,16 @@ OnjeomAI/
 
 ## Kaggle 배포
 
-> GPU T4 x1, 인터넷 연결 ON
+> GPU T4 x2, 인터넷 연결 ON
+
+**셀 1 — 패키지 설치** (먼저 실행 후 완료 확인)
+
+```python
+!pip install -q fastapi uvicorn pyngrok pydantic-settings chromadb sentence-transformers peft accelerate bitsandbytes trl
+!pip install -q "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
+```
+
+**셀 2 — 서버 실행**
 
 ```python
 import os
@@ -104,7 +113,6 @@ from pyngrok import ngrok
 os.chdir("/kaggle/working")
 os.system("rm -rf /kaggle/working/OnjeomAI")
 os.system("git clone -b develop https://github.com/OnjeomAI/OnjeomAI.git /kaggle/working/OnjeomAI")
-os.system("pip install -q pyngrok pydantic-settings chromadb sentence-transformers peft accelerate bitsandbytes")
 
 os.chdir("/kaggle/working/OnjeomAI/api")
 os.makedirs("./chroma_db", exist_ok=True)
@@ -123,8 +131,9 @@ def run_server():
 
 threading.Thread(target=run_server, daemon=True).start()
 
-print("모델 로딩 중...")
-for i in range(36):
+# Qwen2.5-3B + Llama-3.1-8B 두 모델 로드 → 최대 10분 대기
+print("모델 로딩 중... (최대 10분)")
+for i in range(60):
     time.sleep(10)
     try:
         r = requests.get("http://localhost:8000/health", timeout=3)
@@ -136,7 +145,7 @@ for i in range(36):
 
 ngrok.set_auth_token("YOUR_NGROK_TOKEN")
 tunnel = ngrok.connect(8000)
-print("AI 서버:", tunnel.public_url)
+print("AI 서버 URL:", tunnel.public_url)
 ```
 
 ### POST /api/writing/evaluate

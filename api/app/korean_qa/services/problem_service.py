@@ -17,7 +17,7 @@ DIFFICULTY_DESC = {
     5: "고등학교 3학년 수준의 심화",
 }
 
-_NON_KOREAN = re.compile(r"[^가-힣ᄀ-ᇿ㄰-㆏0-9a-zA-Z\s。．、，,\.\!\?\(\)\[\]\{\}\'\"·…「」『』""''\-]")
+_NON_KOREAN = re.compile(r"[^가-힣ᄀ-ᇿ㄰-㆏0-9a-zA-Z\s。．、，,\.\!\?\(\)\[\]\{\}\'\"·…「」『』""''-]")
 
 
 def _clean(text: str) -> str:
@@ -45,7 +45,7 @@ class ProblemService:
 [모범답안]
 (2~4문장의 완전한 한국어 답변)"""
 
-        if model_manager._model is None:
+        if not model_manager.is_loaded:
             return {
                 "passage_text": f"[MOCK] {reading_ko} 난이도 {difficulty} 지문입니다.",
                 "question_text": "[MOCK] 지문의 핵심 내용을 서술하시오.",
