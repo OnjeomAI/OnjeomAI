@@ -17,7 +17,6 @@ DIFFICULTY_DESC = {
     5: "고등학교 3학년 수준의 심화",
 }
 
-# 한국어가 아닌 문자(한글/숫자/기본 문장부호 제외) 제거
 _NON_KOREAN = re.compile(r"[^가-힣ᄀ-ᇿ㄰-㆏0-9a-zA-Z\s。．、，,\.\!\?\(\)\[\]\{\}\'\"·…「」『』""''\-]")
 
 
@@ -68,7 +67,6 @@ class ProblemService:
 
         for line in output.split("\n"):
             stripped = line.strip()
-            # 태그 매칭: 정확히 일치하거나 태그를 포함하는 경우
             if stripped in ("[지문]", "지문") or stripped.startswith("[지문]"):
                 current = "passage"
                 continue
@@ -93,7 +91,6 @@ class ProblemService:
         question = _clean(question.strip())
         answer = _clean(answer.strip())
 
-        # 파싱 실패 시 전체 출력에서 섹션 재탐색 (정규식)
         if not passage:
             m = re.search(r"\[지문\]\s*(.+?)(?=\[문제\]|\[모범답안\]|$)", output, re.S)
             passage = _clean(m.group(1)) if m else ""
@@ -104,7 +101,6 @@ class ProblemService:
             m = re.search(r"\[모범답안\]\s*(.+?)$", output, re.S)
             answer = _clean(m.group(1)) if m else ""
 
-        # 최종 fallback
         if not passage:
             passage = _clean(output[:400])
         if not question:

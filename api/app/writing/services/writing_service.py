@@ -1,5 +1,5 @@
 from app.core.model_loader import get_writing_evaluator
-from app.schemas.writing import (
+from app.writing.schemas.writing import (
     COMPETENCY_KO,
     AvailableProblem,
     Competency,
@@ -29,12 +29,6 @@ def _calc_keyword_score(
     user_answer: str,
     keywords: list[KeywordItem],
 ) -> tuple[int, list[str], list[str]]:
-    """
-    핵심 키워드 포함 여부로 기본 점수 산출.
-
-    Returns:
-        (score 0~100, matched_keywords, missing_keywords)
-    """
     if not keywords:
         return 0, [], []
 
@@ -59,7 +53,6 @@ def _calc_keyword_score(
 # ── 점수 구간별 피드백 ────────────────────────────────────────────────────────
 
 def _score_feedback(final_score: int) -> tuple[FeedbackType, str]:
-    """요구사항: 80~100 / 50~79 / 0~49 구간별 안내 메시지."""
     if final_score >= 80:
         return (
             FeedbackType.EXCELLENT,
@@ -80,10 +73,6 @@ def _score_feedback(final_score: int) -> tuple[FeedbackType, str]:
 # ── 최종 점수 산출 ────────────────────────────────────────────────────────────
 
 def _calc_final_score(keyword_score: int | None, normalized_score: int) -> int:
-    """
-    키워드 점수가 있으면 키워드(40%) + LLM(60%) 가중 평균.
-    없으면 LLM 점수 그대로 사용.
-    """
     if keyword_score is None:
         return normalized_score
     return round(keyword_score * 0.4 + normalized_score * 0.6)
@@ -92,21 +81,14 @@ def _calc_final_score(keyword_score: int | None, normalized_score: int) -> int:
 # ── 메인 서비스 ───────────────────────────────────────────────────────────────
 
 def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
-    """
-    전체 채점 파이프라인:
-    1단계 키워드 채점 → 2단계 LLM 채점 → 최종 점수 산출
-    → 점수 구간별 피드백 → 50점 미만 심층 분석
-    """
     evaluator = get_writing_evaluator()
 
-    # 1단계: 키워드 채점
     has_keywords = bool(req.keywords)
     if has_keywords:
         kw_score, matched, missing = _calc_keyword_score(req.user_answer, req.keywords)
     else:
         kw_score, matched, missing = None, [], []
 
-    # 2단계: LLM 채점
     llm_result = evaluator.evaluate(
         passage_text=req.passage_text,
         question_text=req.question_text,
@@ -114,11 +96,9 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
         user_answer=req.user_answer,
     )
 
-    # 최종 점수
     final_score = _calc_final_score(kw_score, llm_result["normalized_score"])
     feedback_type, score_feedback = _score_feedback(final_score)
 
-    # 심층 분석 (50점 미만)
     deep = None
     if final_score < 50:
         raw = evaluator.deep_analysis(
@@ -153,7 +133,6 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
 # ── 동적 학습 경로 재조정 ─────────────────────────────────────────────────────
 
 def adjust_curriculum(req: CurriculumAdjustRequest) -> CurriculumAdjustResponse:
-    """3회 연속 50점 미만 역량을 취약 역량으로 판정하여 재조정 메시지 생성."""
     evaluator = get_writing_evaluator()
 
     weak: list[str] = []
@@ -183,7 +162,6 @@ def adjust_curriculum(req: CurriculumAdjustRequest) -> CurriculumAdjustResponse:
 # ── 답변 변화 추적 ────────────────────────────────────────────────────────────
 
 def compare_answers(req: CompareAnswersRequest) -> CompareAnswersResponse:
-    """이전·현재 답변을 비교하여 성장 메시지와 키워드 변화를 반환."""
     evaluator = get_writing_evaluator()
 
     newly_included: list[str] = []
@@ -222,9 +200,6 @@ def compare_answers(req: CompareAnswersRequest) -> CompareAnswersResponse:
 
 # ── 약점 분석 리포트 ──────────────────────────────────────────────────────────
 
-_LEVEL_LABELS = {True: "취약", False: "보통"}  # True = score < 50
-
-# 역량명 → ReadingType 매핑 (대소문자 무관)
 _COMPETENCY_TO_READING_TYPE = {
     "factual": "FACTUAL",
     "inferential": "INFERENTIAL",
@@ -232,13 +207,7 @@ _COMPETENCY_TO_READING_TYPE = {
 }
 
 
-# ── 커리큘럼 플랜 ──────────────────────────────────────────────────────────────
-
 def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanResponse:
-    """
-    theta 기반 스테이지 결정 후 취약 역량 reading_type 우선 배치.
-    - 스테이지별 배정 문제 수: daily_goal × 7
-    """
     theta = req.theta
     if theta < -0.5:
         stages = [1]
@@ -249,7 +218,6 @@ def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanRespon
     else:
         stages = [3, 4]
 
-    # stage → 적합 difficulty 범위
     _stage_diffs: dict[int, list[int]] = {
         1: [1, 2],
         2: [2, 3],
@@ -257,14 +225,12 @@ def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanRespon
         4: [4, 5],
     }
 
-    # 취약 역량(50점 미만)에 대응하는 reading_type 집합
     weak_types: set[str] = {
         _COMPETENCY_TO_READING_TYPE[comp.lower()]
         for comp, score in req.competency_scores.items()
         if score < 50 and comp.lower() in _COMPETENCY_TO_READING_TYPE
     }
 
-    # difficulty → 문제 목록 색인
     by_diff: dict[int, list[AvailableProblem]] = {}
     for p in req.available_problems:
         by_diff.setdefault(p.difficulty, []).append(p)
@@ -286,7 +252,6 @@ def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanRespon
 
 
 def explain_term(req: TermExplainRequest) -> TermExplainResponse:
-    """용어/문장에 대해 쉬운 말로 설명. passageText가 있으면 지문 맥락을 활용."""
     evaluator = get_writing_evaluator()
 
     if req.passage_text:
@@ -306,7 +271,6 @@ def explain_term(req: TermExplainRequest) -> TermExplainResponse:
 
 
 def generate_weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
-    """역량별 평균 점수를 분석하여 약점 리포트와 개선 권장사항 생성."""
     evaluator = get_writing_evaluator()
 
     competency_scores: dict[str, int] = {
