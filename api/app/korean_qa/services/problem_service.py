@@ -100,7 +100,6 @@ class ProblemService:
             {"role": "user", "content": prompt},
         ]
         output = model_manager.generate(messages, max_new_tokens=900)
-        print(f"=== RAW LLM OUTPUT ===\n{output}\n=== END ===", flush=True)
         return self._parse_output(output, difficulty, reading_type)
 
     def _parse_output(self, output: str, difficulty: int, reading_type: str) -> dict:
