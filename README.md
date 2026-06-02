@@ -96,7 +96,7 @@ OnjeomAI/
 **셀 1 — 패키지 설치** (먼저 실행 후 완료 확인)
 
 ```python
-!pip install -q fastapi uvicorn pyngrok pydantic-settings chromadb sentence-transformers peft accelerate bitsandbytes trl
+!pip install -q fastapi uvicorn pyngrok pydantic-settings chromadb sentence-transformers peft accelerate bitsandbytes trl kiwipiepy
 !pip install -q "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
 ```
 
@@ -173,7 +173,7 @@ print("AI 서버 URL:", tunnel.public_url)
 ```json
 {
   "keyword_score": 33,
-  "raw_score": 2,
+  "raw_score": 5,
   "normalized_score": 50,
   "final_score": 43,
   "feedback": "LLM 채점 피드백 텍스트",
@@ -192,8 +192,8 @@ print("AI 서버 URL:", tunnel.public_url)
 | 응답 필드 | 타입 | 설명 |
 |---|---|---|
 | `keyword_score` | int \| null | 1단계 키워드 기반 점수 (0~100). keywords 미입력 시 null |
-| `raw_score` | int | LLM 원점수 (1~4점) |
-| `normalized_score` | int | LLM 정규화 점수 (25 / 50 / 75 / 100) |
+| `raw_score` | int | LLM 원점수 (1~10점) |
+| `normalized_score` | int | LLM 정규화 점수 (10 / 20 / ... / 100) |
 | `final_score` | int | **최종 점수** (키워드 40% + LLM 60%, 또는 LLM 단독) |
 | `feedback_type` | string | `EXCELLENT`(80~100) / `GOOD`(50~79) / `NEEDS_IMPROVEMENT`(0~49) |
 | `score_feedback` | string | 점수 구간별 안내 메시지 |
@@ -523,7 +523,7 @@ IRT 능력 추정치(theta)를 기반으로 스테이지를 결정하고, 취약
 | Optimizer | adamw_8bit |
 | Max length | 1536 |
 | 학습 데이터 | 논술형 + 서술형 + 주제별 (균형 샘플링 48,003건 → 학습 8,000 / 검증 1,000 랜덤) |
-| 점수 척도 | 1~4점 (5점 데이터 없음, 인접 정확도 87.5%, Macro F1 0.5348) |
+| 점수 척도 | 1~4점 fine-tuning (서비스 프롬프트는 1~10점 척도로 운영) |
 | 학습 환경 | RTX 5070 Ti 16GB |
 | 허브 | [Onjeom/writing-ai](https://huggingface.co/Onjeom/writing-ai) |
 
