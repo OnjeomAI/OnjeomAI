@@ -1,3 +1,16 @@
+from __future__ import annotations
+
+import logging
+
+try:
+    from kiwipiepy import Kiwi
+    _kiwi = Kiwi()
+    _kiwi_available = True
+except Exception:
+    _kiwi = None
+    _kiwi_available = False
+    logging.warning("kiwipiepy 로드 실패 — 단순 문자열 매칭으로 대체")
+
 from app.core.model_loader import get_writing_evaluator
 from app.writing.schemas.writing import (
     COMPETENCY_KO,
@@ -23,6 +36,33 @@ from app.writing.schemas.writing import (
 )
 
 
+# ── 형태소 분석 ───────────────────────────────────────────────────────────────
+
+def _extract_lemmas(text: str) -> set[str]:
+    """텍스트에서 형태소 기본형(lemma) 집합 추출. kiwipiepy 없으면 빈 집합."""
+    if not _kiwi_available or not _kiwi:
+        return set()
+    try:
+        tokens = _kiwi.tokenize(text)
+        return {tok.lemma for tok in tokens if tok.lemma}
+    except Exception:
+        return set()
+
+
+def _keyword_matches(keyword: str, user_answer: str, lemmas: set[str]) -> bool:
+    """직접 포함 or 형태소 기본형 매칭."""
+    if keyword in user_answer:
+        return True
+    # 키워드 자체도 형태소 분석 후 기본형으로 비교
+    if _kiwi_available and _kiwi:
+        try:
+            kw_lemmas = {tok.lemma for tok in _kiwi.tokenize(keyword) if tok.lemma}
+            return bool(kw_lemmas & lemmas)
+        except Exception:
+            pass
+    return False
+
+
 # ── 1단계: 키워드 채점 ────────────────────────────────────────────────────────
 
 def _calc_keyword_score(
@@ -36,11 +76,12 @@ def _calc_keyword_score(
     if total_weight == 0:
         return 0, [], []
 
+    lemmas = _extract_lemmas(user_answer)
     matched, missing = [], []
     earned = 0
 
     for kw in keywords:
-        if kw.keyword in user_answer:
+        if _keyword_matches(kw.keyword, user_answer, lemmas):
             matched.append(kw.keyword)
             earned += kw.weight
         else:
