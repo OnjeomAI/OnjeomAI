@@ -12,6 +12,7 @@ class GradeRequest(BaseModel):
     model_answer: str
     keywords: list[Keyword]
     student_answer: str
+    reading_type: str = "FACTUAL"
 
 
 class GradeResponse(BaseModel):

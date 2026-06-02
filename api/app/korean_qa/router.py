@@ -23,6 +23,7 @@ def grade_answer(req: GradeRequest):
         model_answer=req.model_answer,
         keywords=[k.model_dump() for k in req.keywords],
         student_answer=req.student_answer,
+        reading_type=req.reading_type,
     )
 
 
@@ -79,11 +80,15 @@ def generate_curriculum(req: CurriculumRequest):
 # ── 문제 생성 ─────────────────────────────────────────────────────
 @router.post("/problems/generate", response_model=ProblemGenerateResponse)
 def generate_problem(req: ProblemGenerateRequest):
-    return problem_service.generate(
-        difficulty=req.difficulty,
-        reading_type=req.reading_type,
-        topic=req.topic,
-    )
+    try:
+        return problem_service.generate(
+            difficulty=req.difficulty,
+            reading_type=req.reading_type,
+            topic=req.topic,
+        )
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ── 벡터 인덱싱 ───────────────────────────────────────────────────
