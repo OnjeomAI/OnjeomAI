@@ -19,6 +19,14 @@ DIFFICULTY_DESC = {
 
 _NON_KOREAN = re.compile(r"[^가-힣ᄀ-ᇿ㄰-㆏0-9a-zA-Z\s。．、，,\.\!\?\(\)\[\]\{\}\'\"·…「」『』""''-]")
 _CHOICE_LINE = re.compile(r"^\s*[①②③④⑤]\s|^\s*[1-5][\.）)]\s")
+_OBJECTIVE_PATTERN = re.compile(r"(것은|않은\s*것은|알맞은\s*것은|적절한\s*것은|옳은\s*것은|틀린\s*것은)\s*\??")
+
+_FALLBACK_QUESTIONS = {
+    "FACTUAL":     "지문에서 확인할 수 있는 핵심 내용을 두 가지 이상 서술하시오.",
+    "INFERENTIAL": "지문을 바탕으로 글쓴이의 의도나 숨겨진 의미를 추론하여 서술하시오.",
+    "CRITICAL":    "지문의 주장에 대한 자신의 의견을 근거와 함께 서술하시오.",
+    "CREATIVE":    "지문에 나온 핵심 어휘의 의미를 문맥에서 파악하고, 글의 논리 흐름과 연결지어 서술하시오.",
+}
 
 
 def _clean(text: str) -> str:
@@ -26,9 +34,15 @@ def _clean(text: str) -> str:
 
 
 def _strip_choices(text: str) -> str:
-    """선택지 행(①②③④⑤, 1. 2. 등)을 제거한다."""
     lines = [l for l in text.split("\n") if not _CHOICE_LINE.match(l)]
     return "\n".join(lines).strip()
+
+
+def _fix_objective_question(question: str, reading_type: str) -> str:
+    """객관식 문구(~것은?)가 감지되면 주관식 문구로 대체한다."""
+    if _OBJECTIVE_PATTERN.search(question):
+        return _FALLBACK_QUESTIONS.get(reading_type, "지문의 핵심 내용을 서술하시오.")
+    return question
 
 
 _TYPE_HINT = {
@@ -51,7 +65,10 @@ class ProblemService:
         prompt = f"""{topic_hint}반드시 한국어로만 작성하세요. 다음 조건에 맞는 국어 독해 문제를 만들어주세요.
 - 난이도: {diff_desc}
 - 독해 유형: {reading_ko}
-- 문제 유형: 주관식 서술형 (①②③④⑤ 같은 선택지를 절대 포함하지 마세요)
+- 문제 유형: 주관식 서술형
+  * 질문은 반드시 "~하시오", "~설명하시오", "~서술하시오" 중 하나로 끝나야 합니다
+  * "~것은?", "~않은 것은?", "~알맞은 것은?", "~적절한 것은?" 형식은 절대 금지합니다
+  * ①②③④⑤ 같은 선택지를 절대 포함하지 마세요
 
 [문제] 작성 지침: {type_hint}
 
@@ -61,7 +78,7 @@ class ProblemService:
 (200~400자 분량의 한국어 지문)
 
 [문제]
-(주관식 서술형 질문 1개 — 선택지 없이 질문문만 작성)
+(주관식 서술형 질문 1개 — "~하시오"로 끝나는 문장)
 
 [모범답안]
 (2~4문장의 완전한 한국어 답변)"""
@@ -109,7 +126,7 @@ class ProblemService:
                 answer += stripped + "\n"
 
         passage = _clean(passage.strip())
-        question = _clean(_strip_choices(question.strip()))
+        question = _fix_objective_question(_clean(_strip_choices(question.strip())), reading_type)
         answer = _clean(answer.strip())
 
         if not passage:
@@ -117,7 +134,7 @@ class ProblemService:
             passage = _clean(m.group(1)) if m else ""
         if not question:
             m = re.search(r"\[문제\]\s*(.+?)(?=\[모범답안\]|$)", output, re.S)
-            question = _clean(m.group(1)) if m else ""
+            question = _fix_objective_question(_clean(m.group(1)), reading_type) if m else ""
         if not answer:
             m = re.search(r"\[모범답안\]\s*(.+?)$", output, re.S)
             answer = _clean(m.group(1)) if m else ""
