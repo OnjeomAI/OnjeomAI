@@ -79,6 +79,7 @@ def _strip_answer_prefix(text: str) -> str:
 
 
 MIN_PASSAGE_LEN = 100
+MAX_PASSAGE_LEN = 400
 MIN_ANSWER_LEN = {1: 20, 2: 30, 3: 50, 4: 70, 5: 90}
 
 
@@ -127,13 +128,17 @@ class ProblemService:
             {"role": "system", "content": "당신은 한국어로 국어 독해 문제를 출제하는 전문 교사입니다. 반드시 한국어로만 답하세요."},
             {"role": "user", "content": prompt},
         ]
-        output = model_manager.generate(messages, max_new_tokens=900)
+        output = model_manager.generate(messages, max_new_tokens=700)
         result = self._parse_output(output, difficulty, reading_type)
 
         # 지문이 너무 짧으면 1회 재생성
         if len(result["passage_text"]) < MIN_PASSAGE_LEN:
-            output = model_manager.generate(messages, max_new_tokens=900)
+            output = model_manager.generate(messages, max_new_tokens=700)
             result = self._parse_output(output, difficulty, reading_type)
+
+        # 지문이 너무 길면 400자로 자르기
+        if len(result["passage_text"]) > MAX_PASSAGE_LEN:
+            result["passage_text"] = result["passage_text"][:MAX_PASSAGE_LEN].rsplit(" ", 1)[0]
 
         # 모범답안이 없거나 너무 짧으면 2차 QA 호출로 생성
         min_len = MIN_ANSWER_LEN.get(difficulty, 50)
