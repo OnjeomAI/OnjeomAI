@@ -158,7 +158,7 @@ class ProblemService:
                 {"role": "system", "content": "다음 지문을 읽고 문항에 대한 모범답안을 반드시 3문장 이상으로 구체적으로 작성하시오. 짧게 쓰지 마시오."},
                 {"role": "user", "content": f"[지문]\n{result['passage_text']}\n\n[문항]\n{result['question_text']}"},
             ]
-            qa_output = model_manager.generate(qa_messages, max_new_tokens=300)
+            qa_output = model_manager.generate(qa_messages, max_new_tokens=400)
             m = re.search(r"해설\s*[:：]\s*(.+?)$", qa_output, re.S)
             if not m:
                 m = re.search(r"정답\s*[:：]\s*(.+?)$", qa_output, re.S)
