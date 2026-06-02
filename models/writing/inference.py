@@ -58,6 +58,13 @@ WEAKNESS_REPORT_INSTRUCTION = (
 
 SCORE_MAP = {1: 25, 2: 50, 3: 75, 4: 100}
 
+_READING_TYPE_HINT = {
+    "FACTUAL":     "사실적 독해 — 지문에 명시된 정보를 정확히 파악했는지 평가하시오.",
+    "INFERENTIAL": "추론적 독해 — 지문에서 직접 드러나지 않은 내용을 올바르게 추론했는지 평가하시오.",
+    "CRITICAL":    "비판적 독해 — 글쓴이의 주장과 근거를 분석하고 타당성을 평가했는지 확인하시오.",
+    "CREATIVE":    "창의적 독해 — 지문을 바탕으로 자신의 생각을 창의적으로 확장했는지 평가하시오.",
+}
+
 
 class WritingEvaluator:
     """서술형 답안 자동 채점 및 피드백 생성."""
@@ -83,7 +90,8 @@ class WritingEvaluator:
 
     def _generate(self, prompt: str, max_new_tokens: int = 512) -> str:
         import torch
-        inputs = self._tokenizer([prompt], return_tensors="pt").to("cuda")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        inputs = self._tokenizer([prompt], return_tensors="pt").to(device)
         with torch.no_grad():
             outputs = self._model.generate(
                 **inputs,
@@ -117,19 +125,26 @@ class WritingEvaluator:
     @staticmethod
     def _parse_feedback(text: str) -> str:
         parts = re.split(r"\[최종\s*점수\s*:", text)
-        return parts[0].strip()
+        feedback = parts[0].strip()
+        return feedback if feedback else text.strip()
 
     # ── 채점 ──────────────────────────────────────────────────────────────────
 
     def evaluate(self, passage_text: str, question_text: str,
-                 model_answer: str, user_answer: str) -> dict:
+                 model_answer: str, user_answer: str,
+                 reading_type: str | None = None) -> dict:
         """2단계 LLM 채점. raw_score(1~4), normalized_score, feedback 반환."""
         self._load()
+        passage_section = f"[지문]\n{passage_text[:600]}\n\n" if passage_text else ""
+        type_hint = _READING_TYPE_HINT.get(reading_type or "", "")
+        type_section = f"[문항 유형] {type_hint}\n\n" if type_hint else ""
         instruction = (
             f"{RELAXED_INSTRUCTION}\n\n"
+            f"{passage_section}"
+            f"{type_section}"
             f"[문제]\n{question_text}\n\n[모범 답안]\n{model_answer}"
         )
-        prompt = ALPACA_PROMPT.format(instruction=instruction, input=user_answer[:700])
+        prompt = ALPACA_PROMPT.format(instruction=instruction, input=user_answer[:500])
         response = self._generate(prompt)
         raw_score = self._parse_score(response)
         return {
@@ -138,21 +153,23 @@ class WritingEvaluator:
             "feedback": self._parse_feedback(response),
         }
 
-    def deep_analysis(self, question_text: str, model_answer: str,
+    def deep_analysis(self, passage_text: str, question_text: str, model_answer: str,
                       user_answer: str, score: int) -> dict:
         """50점 미만 답안 CoT 심층 분석."""
         self._load()
+        passage_section = f"[지문]\n{passage_text[:400]}\n\n" if passage_text else ""
         context = (
+            f"{passage_section}"
             f"[문제]\n{question_text}\n\n[모범 답안]\n{model_answer}\n\n"
-            f"[학생 답안]\n{user_answer[:700]}\n\n[받은 점수] {score}점 / 100점"
+            f"[학생 답안]\n{user_answer[:500]}\n\n[받은 점수] {score}점 / 100점"
         )
         prompt = ALPACA_PROMPT.format(instruction=DEEP_ANALYSIS_INSTRUCTION, input=context)
         response = self._generate(prompt, max_new_tokens=300)
         data = self._parse_json(response)
         return {
-            "error_types": data.get("error_types", ["내용 누락"]),
-            "analysis": data.get("analysis", response),
-            "improvement": data.get("improvement", ""),
+            "error_types": data.get("error_types") or ["내용 누락"],
+            "analysis": data.get("analysis") or response,
+            "improvement": data.get("improvement") or "관련 개념을 다시 학습하고 핵심 내용을 중심으로 답안을 보완해보세요.",
         }
 
     # ── 동적 학습 경로 재조정 ─────────────────────────────────────────────────
