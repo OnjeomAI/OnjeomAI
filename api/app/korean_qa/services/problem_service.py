@@ -60,6 +60,7 @@ def _strip_answer_prefix(text: str) -> str:
 
 
 MIN_PASSAGE_LEN = 100
+MIN_ANSWER_LEN = {1: 20, 2: 30, 3: 50, 4: 70, 5: 90}
 
 
 class ProblemService:
@@ -113,8 +114,9 @@ class ProblemService:
             output = model_manager.generate(messages, max_new_tokens=900)
             result = self._parse_output(output, difficulty, reading_type)
 
-        # 모범답안이 없으면 2차 QA 호출로 생성
-        if not result["model_answer"]:
+        # 모범답안이 없거나 너무 짧으면 2차 QA 호출로 생성
+        min_len = MIN_ANSWER_LEN.get(difficulty, 50)
+        if not result["model_answer"] or len(result["model_answer"]) < min_len:
             qa_messages = [
                 {"role": "system", "content": "다음 지문을 읽고 문항에 대한 모범답안을 2~4문장으로 작성하시오."},
                 {"role": "user", "content": f"[지문]\n{result['passage_text']}\n\n[문항]\n{result['question_text']}"},
