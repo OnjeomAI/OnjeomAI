@@ -96,7 +96,7 @@ class ProblemService:
             {"role": "system", "content": "당신은 한국어로 국어 독해 문제를 출제하는 전문 교사입니다. 반드시 한국어로만 답하세요."},
             {"role": "user", "content": prompt},
         ]
-        output = model_manager.generate(messages, max_new_tokens=600)
+        output = model_manager.generate(messages, max_new_tokens=900)
         return self._parse_output(output, difficulty, reading_type)
 
     def _parse_output(self, output: str, difficulty: int, reading_type: str) -> dict:
