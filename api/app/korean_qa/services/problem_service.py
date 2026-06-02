@@ -3,12 +3,10 @@ from app.core.model import model_manager
 
 
 READING_TYPE_KO = {
-    "FACTUAL": "사실적 이해",
+    "FACTUAL":     "사실적 이해",
     "INFERENTIAL": "추론적 이해",
-    "CRITICAL": "비판적 이해",
-    "CREATIVE": "창의적 이해",
-    "VOCABULARY": "어휘 이해",
-    "LOGICAL": "논리 이해",
+    "CRITICAL":    "비판적 이해",
+    "CREATIVE":    "창의적 이해",
 }
 
 DIFFICULTY_DESC = {
@@ -34,13 +32,17 @@ def _strip_choices(text: str) -> str:
 
 
 _TYPE_HINT = {
-    "VOCABULARY": "지문에 나온 특정 단어나 표현의 의미·쓰임새를 묻는 주관식 서술형 문제 (예: '~의 의미를 문맥에 맞게 설명하시오.')",
-    "LOGICAL": "지문의 논리 구조·인과 관계·흐름을 파악하여 서술하는 주관식 서술형 문제 (예: '~가 일어난 원인을 지문에서 찾아 서술하시오.')",
+    "CREATIVE": "어휘 이해와 논리적 사고를 동시에 요구하는 주관식 서술형 문제 (예: '~의 의미를 문맥 속에서 파악하고, 글의 논리 흐름과 연결지어 서술하시오.')",
 }
+
+
+GENERATABLE_TYPES = {"FACTUAL", "INFERENTIAL", "CRITICAL", "CREATIVE"}
 
 
 class ProblemService:
     def generate(self, difficulty: int, reading_type: str, topic: str | None) -> dict:
+        if reading_type not in GENERATABLE_TYPES:
+            raise ValueError(f"문제 생성 불가 유형: {reading_type}. 생성 가능 유형: {sorted(GENERATABLE_TYPES)}")
         reading_ko = READING_TYPE_KO.get(reading_type, "사실적 이해")
         diff_desc = DIFFICULTY_DESC.get(difficulty, "중학교 수준의")
         topic_hint = f"주제: {topic}\n" if topic else ""

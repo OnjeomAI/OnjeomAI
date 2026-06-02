@@ -1,5 +1,13 @@
 from app.core.model import model_manager
 
+# 유형별 키워드 점수 반영 비중 (나머지는 LLM 점수)
+KEYWORD_WEIGHTS: dict[str, float] = {
+    "FACTUAL":     0.60,
+    "CREATIVE":    0.50,
+    "INFERENTIAL": 0.30,
+    "CRITICAL":    0.20,
+}
+
 
 class GradingService:
     def grade(
@@ -9,14 +17,17 @@ class GradingService:
         model_answer: str,
         keywords: list[dict],
         student_answer: str,
+        reading_type: str = "FACTUAL",
     ) -> dict:
         stage1_score, missing_keywords, found_keywords = self._keyword_grade(
             student_answer, keywords
         )
-        final_score = self._llm_grade(
+        llm_score = self._llm_grade(
             passage, question, model_answer, student_answer,
             stage1_score, missing_keywords,
         )
+        kw_weight = KEYWORD_WEIGHTS.get(reading_type, 0.5)
+        final_score = max(0, min(100, int(stage1_score * kw_weight + llm_score * (1 - kw_weight))))
         feedback = self._score_based_feedback(final_score, missing_keywords)
         return {
             "score": final_score,
