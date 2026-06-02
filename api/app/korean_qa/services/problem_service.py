@@ -20,9 +20,9 @@ DIFFICULTY_DESC = {
 _NON_KOREAN = re.compile(r"[^가-힣ᄀ-ᇿ㄰-㆏0-9a-zA-Z\s。．、，,\.\!\?\(\)\[\]\{\}\'\"·…「」『』""''-]")
 _CHOICE_LINE = re.compile(r"^\s*[①②③④⑤]\s|^\s*[1-5][\.）)]\s")
 _OBJECTIVE_PATTERN = re.compile(r"(것은|않은\s*것은|알맞은\s*것은|적절한\s*것은|옳은\s*것은|틀린\s*것은)\s*\??")
-_TAG_PASSAGE = re.compile(r"^\[지문\]|^지문\s*[:：]?$")
-_TAG_QUESTION = re.compile(r"^\[문제\]|^문제\s*[:：]?$")
-_TAG_ANSWER  = re.compile(r"^\[모범\s*답안\]|^모범\s*답안\s*[:：]?$")
+_TAG_PASSAGE  = re.compile(r"^\[지문\]\s*(.*)|^지문\s*[:：]\s*(.*)|^지문\s*$")
+_TAG_QUESTION = re.compile(r"^\[문제\]\s*(.*)|^문제\s*[:：]\s*(.*)|^문제\s*$")
+_TAG_ANSWER   = re.compile(r"^\[모범\s*답안\]\s*(.*)|^모범\s*답안\s*[:：]\s*(.*)|^모범\s*답안\s*$")
 
 _FALLBACK_QUESTIONS = {
     "FACTUAL":     "지문에서 확인할 수 있는 핵심 내용을 두 가지 이상 서술하시오.",
@@ -108,14 +108,26 @@ class ProblemService:
 
         for line in output.split("\n"):
             stripped = line.strip()
-            if _TAG_PASSAGE.match(stripped):
+            m = _TAG_PASSAGE.match(stripped)
+            if m:
                 current = "passage"
+                inline = next((g for g in m.groups() if g), "").strip()
+                if inline:
+                    passage += inline + "\n"
                 continue
-            elif _TAG_QUESTION.match(stripped):
+            m = _TAG_QUESTION.match(stripped)
+            if m:
                 current = "question"
+                inline = next((g for g in m.groups() if g), "").strip()
+                if inline:
+                    question += inline + "\n"
                 continue
-            elif _TAG_ANSWER.match(stripped):
+            m = _TAG_ANSWER.match(stripped)
+            if m:
                 current = "answer"
+                inline = next((g for g in m.groups() if g), "").strip()
+                if inline:
+                    answer += inline + "\n"
                 continue
 
             if not stripped:
