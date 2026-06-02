@@ -140,6 +140,17 @@ class ProblemService:
         if len(result["passage_text"]) > MAX_PASSAGE_LEN:
             result["passage_text"] = result["passage_text"][:MAX_PASSAGE_LEN].rsplit(" ", 1)[0]
 
+        # 질문이 fallback이면 2차 호출로 생성
+        if result["question_text"] in _FALLBACK_QUESTIONS.values():
+            q_messages = [
+                {"role": "system", "content": "다음 지문을 읽고 주관식 서술형 질문을 1개만 만드시오. 질문은 반드시 '~하시오', '~서술하시오', '~설명하시오' 중 하나로 끝나야 합니다. 질문 외에 다른 말은 쓰지 마시오."},
+                {"role": "user", "content": f"[지문]\n{result['passage_text']}"},
+            ]
+            q_output = model_manager.generate(q_messages, max_new_tokens=100)
+            question = _fix_objective_question(_clean(q_output.strip()), reading_type)
+            if question and question not in _FALLBACK_QUESTIONS.values():
+                result["question_text"] = question
+
         # 모범답안이 없거나 너무 짧으면 2차 QA 호출로 생성
         min_len = MIN_ANSWER_LEN.get(difficulty, 50)
         if not result["model_answer"] or len(result["model_answer"]) < min_len:
