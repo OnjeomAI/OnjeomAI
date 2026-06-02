@@ -14,8 +14,8 @@ _empty_korean_qa = MagicMock()
 _empty_korean_qa.router = _APIRouter()   # MagicMock 대신 실제 빈 라우터
 
 sys.modules["chromadb"] = MagicMock()
-sys.modules["app.services.rag_service"] = MagicMock()
-sys.modules["app.routers.korean_qa"] = _empty_korean_qa
+sys.modules["app.korean_qa.services.rag_service"] = MagicMock()
+sys.modules["app.korean_qa.router"] = _empty_korean_qa
 
 
 class FakeEvaluator:
@@ -63,7 +63,6 @@ def fake_evaluator():
 @pytest.fixture
 def test_client(fake_evaluator):
     from app.main import app
-    import app.services.writing_service as ws
     import app.core.model_loader as ml
 
     ml._writing_evaluator = fake_evaluator

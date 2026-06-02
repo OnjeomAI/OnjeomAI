@@ -1,14 +1,14 @@
-# 담당: 이성진
 from fastapi import APIRouter, BackgroundTasks
-from app.schemas.grading import GradeRequest, GradeResponse
-from app.schemas.tutor import TutorRequest, TutorResponse, ExplainRequest, ExplainResponse
-from app.schemas.curriculum import CurriculumRequest, CurriculumResponse
-from app.schemas.indexing import IndexRequest, IndexResponse
-from app.schemas.problem import ProblemGenerateRequest, ProblemGenerateResponse
-from app.services.grading_service import grading_service
-from app.services.rag_service import rag_service
-from app.services.curriculum_service import curriculum_service
-from app.services.problem_service import problem_service
+
+from app.korean_qa.schemas.grading import GradeRequest, GradeResponse
+from app.korean_qa.schemas.tutor import TutorRequest, TutorResponse, ExplainRequest, ExplainResponse
+from app.korean_qa.schemas.curriculum import CurriculumRequest, CurriculumResponse
+from app.korean_qa.schemas.indexing import IndexRequest, IndexResponse
+from app.korean_qa.schemas.problem import ProblemGenerateRequest, ProblemGenerateResponse
+from app.korean_qa.services.grading_service import grading_service
+from app.korean_qa.services.rag_service import rag_service
+from app.korean_qa.services.curriculum_service import curriculum_service
+from app.korean_qa.services.problem_service import problem_service
 from app.core.model import model_manager
 
 router = APIRouter(tags=["korean_qa"])
@@ -96,4 +96,4 @@ def index_content(req: IndexRequest, background_tasks: BackgroundTasks):
         question=req.question,
         answer=req.model_answer,
     )
-    return IndexResponse(status="indexing", content_id=req.content_id, chunks_indexed=0)
+    return IndexResponse(status="queued", content_id=req.content_id, chunks_indexed=0)

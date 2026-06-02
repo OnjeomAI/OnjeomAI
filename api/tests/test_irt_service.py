@@ -5,7 +5,7 @@ IRT 능력 추정 서비스 품질 테스트
 """
 
 import pytest
-from app.services.irt_service import estimate_theta
+from app.writing.services.irt_service import estimate_theta
 
 
 class TestEstimateTheta:

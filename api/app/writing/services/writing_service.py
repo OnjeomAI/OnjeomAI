@@ -1,5 +1,18 @@
+from __future__ import annotations
+
+import logging
+
+try:
+    from kiwipiepy import Kiwi
+    _kiwi = Kiwi()
+    _kiwi_available = True
+except Exception:
+    _kiwi = None
+    _kiwi_available = False
+    logging.warning("kiwipiepy 로드 실패 — 단순 문자열 매칭으로 대체")
+
 from app.core.model_loader import get_writing_evaluator
-from app.schemas.writing import (
+from app.writing.schemas.writing import (
     COMPETENCY_KO,
     AvailableProblem,
     Competency,
@@ -23,13 +36,39 @@ from app.schemas.writing import (
 )
 
 
+# ── 형태소 분석 ───────────────────────────────────────────────────────────────
+
+def _extract_lemmas(text: str) -> set[str]:
+    """텍스트에서 형태소 기본형(lemma) 집합 추출. kiwipiepy 없으면 빈 집합."""
+    if not _kiwi_available or not _kiwi:
+        return set()
+    try:
+        tokens = _kiwi.tokenize(text)
+        return {tok.lemma for tok in tokens if tok.lemma}
+    except Exception:
+        return set()
+
+
+def _keyword_matches(keyword: str, user_answer: str, lemmas: set[str]) -> bool:
+    """직접 포함 or 형태소 기본형 매칭."""
+    if keyword in user_answer:
+        return True
+    # 키워드 자체도 형태소 분석 후 기본형으로 비교
+    if _kiwi_available and _kiwi:
+        try:
+            kw_lemmas = {tok.lemma for tok in _kiwi.tokenize(keyword) if tok.lemma}
+            return bool(kw_lemmas & lemmas)
+        except Exception:
+            pass
+    return False
+
+
 # ── 1단계: 키워드 채점 ────────────────────────────────────────────────────────
 
 def _calc_keyword_score(
     user_answer: str,
     keywords: list[KeywordItem],
 ) -> tuple[int, list[str], list[str]]:
-    """핵심 키워드 포함 여부로 기본 점수 산출."""
     if not keywords:
         return 0, [], []
 
@@ -37,11 +76,12 @@ def _calc_keyword_score(
     if total_weight == 0:
         return 0, [], []
 
+    lemmas = _extract_lemmas(user_answer)
     matched, missing = [], []
     earned = 0
 
     for kw in keywords:
-        if kw.keyword in user_answer:
+        if _keyword_matches(kw.keyword, user_answer, lemmas):
             matched.append(kw.keyword)
             earned += kw.weight
         else:
@@ -71,22 +111,36 @@ def _score_feedback(final_score: int) -> tuple[FeedbackType, str]:
         )
 
 
+# ── 유형별 키워드 가중치 ──────────────────────────────────────────────────────
+
+_KEYWORD_WEIGHT: dict[str, float] = {
+    "VOCABULARY":  0.7,  # 어휘: 키워드가 곧 정답
+    "FACTUAL":     0.6,  # 사실적: 지문 정보 직접 확인
+    "LOGICAL":     0.4,  # 논리: 구조적, 중간
+    "INFERENTIAL": 0.3,  # 추론적: LLM 판단 비중 높음
+    "CRITICAL":    0.2,  # 비판적: 주관적, LLM 중심
+    "CREATIVE":    0.2,  # 창의적: 매우 주관적
+}
+_DEFAULT_KEYWORD_WEIGHT = 0.4
+
+
 # ── 최종 점수 산출 ────────────────────────────────────────────────────────────
 
-def _calc_final_score(keyword_score: int | None, normalized_score: int) -> int:
-    """키워드 점수가 있으면 키워드(40%) + LLM(60%) 가중 평균, 없으면 LLM 점수 그대로."""
+def _calc_final_score(keyword_score: int | None, normalized_score: int,
+                      reading_type: str | None = None) -> int:
     if keyword_score is None:
         return normalized_score
-    return round(keyword_score * 0.4 + normalized_score * 0.6)
+    kw_weight = _KEYWORD_WEIGHT.get(reading_type or "", _DEFAULT_KEYWORD_WEIGHT)
+    return round(keyword_score * kw_weight + normalized_score * (1 - kw_weight))
 
 
 # ── 메인 서비스 ───────────────────────────────────────────────────────────────
 
 def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
-    """전체 채점 파이프라인: 1단계 키워드 → 2단계 LLM → 최종 점수 → 심층 분석"""
     evaluator = get_writing_evaluator()
 
-    if req.keywords:
+    has_keywords = bool(req.keywords)
+    if has_keywords:
         kw_score, matched, missing = _calc_keyword_score(req.user_answer, req.keywords)
     else:
         kw_score, matched, missing = None, [], []
@@ -96,16 +150,14 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
         question_text=req.question_text,
         model_answer=req.model_answer,
         user_answer=req.user_answer,
-        reading_type=req.reading_type,
     )
 
-    final_score = _calc_final_score(kw_score, llm_result["normalized_score"])
+    final_score = _calc_final_score(kw_score, llm_result["normalized_score"], req.reading_type)
     feedback_type, score_feedback = _score_feedback(final_score)
 
     deep = None
     if final_score < 50:
         raw = evaluator.deep_analysis(
-            passage_text=req.passage_text,
             question_text=req.question_text,
             model_answer=req.model_answer,
             user_answer=req.user_answer,
@@ -137,7 +189,6 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
 # ── 동적 학습 경로 재조정 ─────────────────────────────────────────────────────
 
 def adjust_curriculum(req: CurriculumAdjustRequest) -> CurriculumAdjustResponse:
-    """3회 연속 50점 미만 역량을 취약 역량으로 판정하여 재조정 메시지 생성."""
     evaluator = get_writing_evaluator()
 
     weak: list[str] = []
@@ -167,7 +218,6 @@ def adjust_curriculum(req: CurriculumAdjustRequest) -> CurriculumAdjustResponse:
 # ── 답변 변화 추적 ────────────────────────────────────────────────────────────
 
 def compare_answers(req: CompareAnswersRequest) -> CompareAnswersResponse:
-    """이전·현재 답변을 비교하여 성장 메시지와 키워드 변화를 반환."""
     evaluator = get_writing_evaluator()
 
     newly_included: list[str] = []
@@ -206,56 +256,16 @@ def compare_answers(req: CompareAnswersRequest) -> CompareAnswersResponse:
 
 # ── 약점 분석 리포트 ──────────────────────────────────────────────────────────
 
-_COMPETENCY_TO_READING_TYPE: dict[str, str] = {
+_COMPETENCY_TO_READING_TYPE = {
     "factual": "FACTUAL",
     "inferential": "INFERENTIAL",
     "critical": "CRITICAL",
+    "vocabulary": "VOCABULARY",
+    "logical": "LOGICAL",
 }
 
 
-def generate_weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
-    """역량별 평균 점수를 분석하여 약점 리포트와 개선 권장사항 생성."""
-    evaluator = get_writing_evaluator()
-
-    competency_scores: dict[str, int] = {
-        COMPETENCY_KO[item.competency]: item.score for item in req.competency_scores
-    }
-
-    result = evaluator.weakness_report(competency_scores)
-
-    weak_details: list[WeakCompetencyDetail] = []
-    priority: str | None = None
-    lowest_score = 101
-
-    for item in req.competency_scores:
-        ko_name = COMPETENCY_KO[item.competency]
-        if item.score < 50:
-            weak_details.append(WeakCompetencyDetail(
-                competency=ko_name, score=item.score, level="취약"
-            ))
-            if item.score < lowest_score:
-                lowest_score = item.score
-                priority = ko_name
-        elif item.score < 70:
-            weak_details.append(WeakCompetencyDetail(
-                competency=ko_name, score=item.score, level="보통"
-            ))
-
-    return WeaknessReportResponse(
-        weak_competencies=weak_details,
-        report=result["report"],
-        recommendations=result["recommendations"],
-        priority_competency=priority,
-    )
-
-
-# ── 커리큘럼 플랜 ──────────────────────────────────────────────────────────────
-
 def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanResponse:
-    """
-    theta 기반 스테이지 결정 후 취약 역량 reading_type 우선 배치.
-    스테이지별 배정 문제 수: daily_goal × 7
-    """
     theta = req.theta
     if theta < -0.5:
         stages = [1]
@@ -299,10 +309,43 @@ def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanRespon
     return CurriculumPlanResponse(plan=plan)
 
 
-# ── 용어 설명 ─────────────────────────────────────────────────────────────────
-
 def explain_term(req: TermExplainRequest) -> TermExplainResponse:
-    """용어/문장에 대해 쉬운 말로 설명. passage_text가 있으면 지문 맥락을 활용."""
     evaluator = get_writing_evaluator()
     explanation = evaluator.explain(req.term, req.passage_text)
     return TermExplainResponse(term=req.term, explanation=explanation)
+
+
+def generate_weakness_report(req: WeaknessReportRequest) -> WeaknessReportResponse:
+    evaluator = get_writing_evaluator()
+
+    competency_scores: dict[str, int] = {
+        COMPETENCY_KO[item.competency]: item.score for item in req.competency_scores
+    }
+
+    result = evaluator.weakness_report(competency_scores)
+
+    weak_details: list[WeakCompetencyDetail] = []
+    priority: str | None = None
+    lowest_score = 101
+
+    for item in req.competency_scores:
+        ko_name = COMPETENCY_KO[item.competency]
+        if item.score < 50:
+            level = "취약"
+            weak_details.append(WeakCompetencyDetail(
+                competency=ko_name, score=item.score, level=level
+            ))
+            if item.score < lowest_score:
+                lowest_score = item.score
+                priority = ko_name
+        elif item.score < 70:
+            weak_details.append(WeakCompetencyDetail(
+                competency=ko_name, score=item.score, level="보통"
+            ))
+
+    return WeaknessReportResponse(
+        weak_competencies=weak_details,
+        report=result["report"],
+        recommendations=result["recommendations"],
+        priority_competency=priority,
+    )

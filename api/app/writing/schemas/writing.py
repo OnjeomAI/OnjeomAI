@@ -6,6 +6,8 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ── 공통 ──────────────────────────────────────────────────────────────────────
+
 class FeedbackType(str, Enum):
     EXCELLENT = "EXCELLENT"
     GOOD = "GOOD"
@@ -35,7 +37,6 @@ COMPETENCY_KO = {
     Competency.LOGICAL: "논리 구조 파악",
 }
 
-
 class KeywordItem(BaseModel):
     keyword: str = Field(..., description="핵심 키워드")
     weight: int = Field(..., ge=1, le=100, description="배점 비중 (1~100)")
@@ -53,7 +54,8 @@ class WritingEvaluateRequest(BaseModel):
         description="1단계 채점용 핵심 키워드 목록 (미입력 시 LLM 단독 채점)",
     )
     reading_type: Optional[str] = Field(
-        None, description="독해 유형 (FACTUAL/INFERENTIAL/CRITICAL/CREATIVE)"
+        None,
+        description="문제 독해 유형 (FACTUAL/INFERENTIAL/CRITICAL/VOCABULARY/LOGICAL/CREATIVE)"
     )
 
 
@@ -140,7 +142,7 @@ class WeakCompetencyDetail(BaseModel):
 
 class WeaknessReportResponse(BaseModel):
     weak_competencies: list[WeakCompetencyDetail] = Field(
-        ..., description="취약/보통 역량 목록"
+        ..., description="취약 역량 목록 (50점 미만)"
     )
     report: str = Field(..., description="LLM 생성 약점 분석 리포트")
     recommendations: list[str] = Field(..., description="역량별 개선 권장사항")

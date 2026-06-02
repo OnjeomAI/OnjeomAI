@@ -7,7 +7,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from app.services.writing_service import (
+from app.writing.services.writing_service import (
     _calc_keyword_score,
     _calc_final_score,
     _score_feedback,
@@ -18,7 +18,7 @@ from app.services.writing_service import (
     evaluate_writing,
     explain_term,
 )
-from app.schemas.writing import (
+from app.writing.schemas.writing import (
     KeywordItem,
     Competency,
     CompetencyHistory,
@@ -192,14 +192,14 @@ class TestAdjustCurriculum:
         )
 
     def test_needs_adjustment_when_3_consecutive_below_50(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             req = self._make_request([("inferential", [40, 45, 30])])
             result = adjust_curriculum(req)
         assert result.needs_adjustment is True
         assert "추론적 독해" in result.weak_competencies
 
     def test_no_adjustment_when_scores_above_50(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             req = self._make_request([("factual", [60, 70, 80])])
             result = adjust_curriculum(req)
         assert result.needs_adjustment is False
@@ -207,13 +207,13 @@ class TestAdjustCurriculum:
 
     def test_no_adjustment_when_not_3_consecutive(self, fake_evaluator):
         """3회 미만이면 취약으로 판정 안 함."""
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             req = self._make_request([("critical", [40, 80])])
             result = adjust_curriculum(req)
         assert result.needs_adjustment is False
 
     def test_mixed_competencies(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             req = self._make_request([
                 ("factual", [80, 90, 85]),
                 ("inferential", [30, 40, 45]),
@@ -241,19 +241,19 @@ class TestCompareAnswers:
         return CompareAnswersRequest(**defaults)
 
     def test_score_diff_positive_is_improved(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = compare_answers(self._base_req(previous_score=40, current_score=75))
         assert result.score_diff == 35
         assert result.is_improved is True
 
     def test_score_diff_negative_not_improved(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = compare_answers(self._base_req(previous_score=75, current_score=40))
         assert result.score_diff == -35
         assert result.is_improved is False
 
     def test_newly_included_keyword_detected(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = compare_answers(self._base_req(
                 previous_answer="환경을 보호해야 한다.",
                 current_answer="자연보호와 생태계 보전이 필요하다.",
@@ -266,7 +266,7 @@ class TestCompareAnswers:
         assert "생태계" in result.newly_included_keywords
 
     def test_still_missing_keyword_detected(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = compare_answers(self._base_req(
                 previous_answer="환경을 보호해야 한다.",
                 current_answer="환경을 보호해야 한다.",  # 동일
@@ -288,7 +288,7 @@ class TestWeaknessReport:
         )
 
     def test_critical_competency_classified_as_weak(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = generate_weakness_report(self._make_request({
                 "factual": 40, "inferential": 80,
             }))
@@ -297,7 +297,7 @@ class TestWeaknessReport:
         assert "추론적 독해" not in weak
 
     def test_moderate_competency_classified_as_normal(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = generate_weakness_report(self._make_request({
                 "factual": 60, "inferential": 80,
             }))
@@ -305,14 +305,14 @@ class TestWeaknessReport:
         assert weak.get("사실적 독해") == "보통"
 
     def test_priority_competency_is_lowest_scorer(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = generate_weakness_report(self._make_request({
                 "factual": 30, "inferential": 45, "critical": 80,
             }))
         assert result.priority_competency == "사실적 독해"  # 30점이 최저
 
     def test_no_weak_competency(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = generate_weakness_report(self._make_request({
                 "factual": 80, "inferential": 75,
             }))
@@ -335,7 +335,7 @@ class TestEvaluateWriting:
         return WritingEvaluateRequest(**defaults)
 
     def test_response_structure(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = evaluate_writing(self._base_req())
         assert result.final_score >= 0
         assert result.feedback != ""
@@ -351,7 +351,7 @@ class TestEvaluateWriting:
             "analysis": "주요 키워드가 없습니다.",
             "improvement": "지문을 다시 읽어보세요.",
         }
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=low_score_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=low_score_evaluator):
             result = evaluate_writing(self._base_req())
         assert result.final_score < 50
         assert result.deep_analysis is not None
@@ -359,14 +359,14 @@ class TestEvaluateWriting:
         low_score_evaluator.deep_analysis.assert_called_once()
 
     def test_no_deep_analysis_above_50(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = evaluate_writing(self._base_req())
         assert result.final_score >= 50
         assert result.deep_analysis is None
 
     def test_keyword_blending(self, fake_evaluator):
         """키워드 점수 40% + LLM 60% 블렌딩 검증."""
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = evaluate_writing(self._base_req(
                 user_answer="자연보호와 생태계 보전이 중요하다.",
                 keywords=[
@@ -383,13 +383,13 @@ class TestEvaluateWriting:
 
 class TestExplainTerm:
     def test_returns_explanation(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = explain_term(TermExplainRequest(term="은유법"))
         assert result.term == "은유법"
         assert result.explanation != ""
 
     def test_with_passage_context(self, fake_evaluator):
-        with patch("app.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
+        with patch("app.writing.services.writing_service.get_writing_evaluator", return_value=fake_evaluator):
             result = explain_term(TermExplainRequest(
                 term="은유법",
                 passage_text="달은 나의 마음이다."

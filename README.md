@@ -22,14 +22,15 @@
 | 학습 프레임워크 | unsloth, transformers, peft, trl, bitsandbytes |
 | AI 서비스 | FastAPI |
 | 벡터 DB | ChromaDB (RAG용) |
-| 배포 | AWS EC2 |
+| 배포 | Kaggle (ngrok) / Docker + GPU 서버 |
 
 ## 레포지토리 구조
 
 ```
-onjeom/
+OnjeomAI/
 ├── README.md
 ├── .gitignore
+├── kaggle_deploy.py               # Kaggle 배포 스크립트
 │
 ├── data/
 │   └── korean_qa/
@@ -39,30 +40,31 @@ onjeom/
 ├── models/
 │   ├── korean_qa/                 # 국어 교과 QA 모델 (담당: 이성진)
 │   │   ├── train.py               # Qwen2.5-3B QLoRA fine-tuning
-│   │   └── inference.py           # 모델 추론
+│   │   └── inference.py           # 단독 추론 스크립트 (서버 미사용)
 │   └── writing/                   # 글쓰기 채점 모델 (담당: 김우주)
 │       ├── train.py               # Llama-3.1-8B QLoRA fine-tuning (unsloth)
 │       └── inference.py           # WritingEvaluator 클래스
 │
-├── api/                           # AI API 서버 ← 팀원 필독
-│   ├── README.md                  # 실행 및 테스트 방법
-│   ├── app/
-│   │   ├── main.py                # FastAPI 진입점
-│   │   ├── core/                  # 모델 로딩 / 환경설정
-│   │   ├── routers/
-│   │   │   ├── korean_qa.py       # 국어 QA 라우터 (담당: 이성진)
-│   │   │   └── writing.py         # 글쓰기 채점 라우터 (담당: 김우주)
-│   │   ├── services/
-│   │   │   ├── writing_service.py # 글쓰기 채점 서비스 (담당: 김우주)
-│   │   │   └── irt_service.py     # IRT 1PL 능력 추정 서비스 (담당: 김우주)
-│   │   └── schemas/
-│   │       └── writing.py         # 요청/응답 Pydantic 스키마 (담당: 김우주)
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── requirements.txt
-│
-└── notebooks/
-    └── korean_qa_train.ipynb      # Colab/Kaggle 학습 노트북
+└── api/                           # AI API 서버 ← 팀원 필독
+    ├── README.md                  # 실행 및 테스트 방법
+    ├── app/
+    │   ├── main.py                # FastAPI 진입점
+    │   ├── core/                  # 공통 (모델 로딩 / 환경설정)
+    │   │   ├── config.py
+    │   │   ├── model.py           # Korean QA 모델 로더 (Qwen2.5-3B)
+    │   │   └── model_loader.py    # Writing 모델 로더 (Llama-3.1-8B)
+    │   ├── korean_qa/             # 국어 QA 도메인 (담당: 이성진)
+    │   │   ├── router.py
+    │   │   ├── schemas/
+    │   │   └── services/
+    │   └── writing/               # 글쓰기 평가 도메인 (담당: 김우주)
+    │       ├── router.py
+    │       ├── irt_router.py
+    │       ├── schemas/
+    │       └── services/
+    ├── Dockerfile
+    ├── docker-compose.yml
+    └── requirements.txt
 ```
 
 ## AI 서비스 API
@@ -84,6 +86,67 @@ onjeom/
 | `GET /health` | 서버 상태 확인 | - | 구현 완료 |
 
 자세한 테스트 방법 → [`api/README.md`](./api/README.md)
+
+---
+
+## Kaggle 배포
+
+> GPU T4 x2, 인터넷 연결 ON
+
+**셀 1 — 패키지 설치** (먼저 실행 후 완료 확인)
+
+```python
+!pip install -q fastapi uvicorn pyngrok pydantic-settings chromadb sentence-transformers peft accelerate bitsandbytes trl
+!pip install -q "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
+```
+
+**셀 2 — 서버 실행**
+
+```python
+import os
+import threading
+import subprocess
+import time
+import requests
+from pyngrok import ngrok
+
+os.chdir("/kaggle/working")
+os.system("rm -rf /kaggle/working/OnjeomAI")
+os.system("git clone -b main https://github.com/OnjeomAI/OnjeomAI.git /kaggle/working/OnjeomAI")
+
+os.chdir("/kaggle/working/OnjeomAI/api")
+os.makedirs("./chroma_db", exist_ok=True)
+
+os.environ.pop("SKIP_MODEL_LOAD", None)
+os.environ["BASE_MODEL"]      = "Qwen/Qwen2.5-3B-Instruct"
+os.environ["ADAPTER_PATH"]    = "./models/korean_qa"
+os.environ["CHROMA_PATH"]     = "./chroma_db"
+os.environ["EMBEDDING_MODEL"] = "jhgan/ko-sroberta-multitask"
+
+os.system("fuser -k 8000/tcp 2>/dev/null || true")
+time.sleep(2)
+
+def run_server():
+    subprocess.run(["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"])
+
+threading.Thread(target=run_server, daemon=True).start()
+
+# Qwen2.5-3B + Llama-3.1-8B 두 모델 로드 → 최대 10분 대기
+print("모델 로딩 중... (최대 10분)")
+for i in range(60):
+    time.sleep(10)
+    try:
+        r = requests.get("http://localhost:8000/health", timeout=3)
+        if r.status_code == 200:
+            print(f"서버 준비 완료! ({(i + 1) * 10}초)")
+            break
+    except Exception:
+        print(f"대기 중... {(i + 1) * 10}초")
+
+ngrok.set_auth_token("YOUR_NGROK_TOKEN")
+tunnel = ngrok.connect(8000)
+print("AI 서버 URL:", tunnel.public_url)
+```
 
 ### POST /api/writing/evaluate
 
@@ -476,8 +539,9 @@ feat/*        # 기능 개발
 
 ### 공통
 - [x] FastAPI AI 서비스 구조 구축
+- [x] korean_qa / writing 도메인 폴더 분리
+- [x] Kaggle 배포 스크립트 작성 (`kaggle_deploy.py`)
 - [ ] Swagger 테스트 완료
-- [ ] AWS EC2 배포
 
 ### 국어 QA (담당: 이성진)
 - [x] 데이터 수집 및 전처리
