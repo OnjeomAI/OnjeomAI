@@ -63,7 +63,7 @@ def _strip_choices(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-_SUBJECTIVE_ENDINGS = re.compile(r"(하시오|서술하시오|설명하시오|쓰시오|작성하시오|논하시오|분석하시오|비교하시오|주시오)\s*\.?\s*$")
+_SUBJECTIVE_ENDINGS = re.compile(r"시오\s*\.?\s*$")
 
 
 def _fix_objective_question(question: str, reading_type: str) -> str:
