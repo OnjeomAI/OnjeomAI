@@ -109,6 +109,7 @@ class ProblemService:
                 {"role": "user", "content": f"[지문]\n{result['passage_text']}\n\n[문항]\n{result['question_text']}"},
             ]
             qa_output = model_manager.generate(qa_messages, max_new_tokens=300)
+            print(f"\n=== QA OUTPUT ===\n{qa_output}\n=== END ===\n", flush=True)
             m = re.search(r"해설\s*[:：]\s*(.+?)$", qa_output, re.S)
             if not m:
                 m = re.search(r"정답\s*[:：]\s*(.+?)$", qa_output, re.S)
