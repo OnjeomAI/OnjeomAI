@@ -100,8 +100,24 @@ class ProblemService:
             {"role": "user", "content": prompt},
         ]
         output = model_manager.generate(messages, max_new_tokens=900)
-        print(f"\n=== RAW ===\n{output}\n=== END ===\n", flush=True)
-        return self._parse_output(output, difficulty, reading_type)
+        result = self._parse_output(output, difficulty, reading_type)
+
+        # 모범답안이 없으면 모델의 네이티브 QA 형식으로 2차 호출
+        if result["model_answer"] == "지문에서 핵심 개념을 찾아 두 문장 이상으로 서술하시오.":
+            qa_messages = [
+                {"role": "system", "content": "다음 지문을 읽고 문항에 답하시오."},
+                {"role": "user", "content": f"[지문]\n{result['passage_text']}\n\n[문항]\n{result['question_text']}"},
+            ]
+            qa_output = model_manager.generate(qa_messages, max_new_tokens=300)
+            m = re.search(r"해설\s*[:：]\s*(.+?)$", qa_output, re.S)
+            if not m:
+                m = re.search(r"정답\s*[:：]\s*(.+?)$", qa_output, re.S)
+            if m:
+                answer = _clean(m.group(1))
+                if answer:
+                    result["model_answer"] = answer
+
+        return result
 
     def _parse_output(self, output: str, difficulty: int, reading_type: str) -> dict:
         passage, question, answer = "", "", ""
