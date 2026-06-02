@@ -1,5 +1,8 @@
 import re
+import logging
 from app.core.model import model_manager
+
+logger = logging.getLogger(__name__)
 
 
 READING_TYPE_KO = {
@@ -100,6 +103,7 @@ class ProblemService:
             {"role": "user", "content": prompt},
         ]
         output = model_manager.generate(messages, max_new_tokens=900)
+        logger.info("=== RAW LLM OUTPUT ===\n%s\n=== END ===", output)
         return self._parse_output(output, difficulty, reading_type)
 
     def _parse_output(self, output: str, difficulty: int, reading_type: str) -> dict:
