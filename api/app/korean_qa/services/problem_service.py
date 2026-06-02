@@ -147,7 +147,9 @@ class ProblemService:
                 {"role": "user", "content": f"[지문]\n{result['passage_text']}"},
             ]
             q_output = model_manager.generate(q_messages, max_new_tokens=100)
-            question = _fix_objective_question(_clean(q_output.strip()), reading_type)
+            q_lines = [l.strip() for l in q_output.strip().split("\n") if l.strip()]
+            q_text = q_lines[-1] if q_lines else ""
+            question = _fix_objective_question(_clean(q_text), reading_type)
             if question and question not in _FALLBACK_QUESTIONS.values():
                 result["question_text"] = question
 
