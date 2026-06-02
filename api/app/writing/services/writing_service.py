@@ -1,3 +1,16 @@
+from __future__ import annotations
+
+import logging
+
+try:
+    from kiwipiepy import Kiwi
+    _kiwi = Kiwi()
+    _kiwi_available = True
+except Exception:
+    _kiwi = None
+    _kiwi_available = False
+    logging.warning("kiwipiepy 로드 실패 — 단순 문자열 매칭으로 대체")
+
 from app.core.model_loader import get_writing_evaluator
 from app.writing.schemas.writing import (
     COMPETENCY_KO,
@@ -23,6 +36,33 @@ from app.writing.schemas.writing import (
 )
 
 
+# ── 형태소 분석 ───────────────────────────────────────────────────────────────
+
+def _extract_lemmas(text: str) -> set[str]:
+    """텍스트에서 형태소 기본형(lemma) 집합 추출. kiwipiepy 없으면 빈 집합."""
+    if not _kiwi_available or not _kiwi:
+        return set()
+    try:
+        tokens = _kiwi.tokenize(text)
+        return {tok.lemma for tok in tokens if tok.lemma}
+    except Exception:
+        return set()
+
+
+def _keyword_matches(keyword: str, user_answer: str, lemmas: set[str]) -> bool:
+    """직접 포함 or 형태소 기본형 매칭."""
+    if keyword in user_answer:
+        return True
+    # 키워드 자체도 형태소 분석 후 기본형으로 비교
+    if _kiwi_available and _kiwi:
+        try:
+            kw_lemmas = {tok.lemma for tok in _kiwi.tokenize(keyword) if tok.lemma}
+            return bool(kw_lemmas & lemmas)
+        except Exception:
+            pass
+    return False
+
+
 # ── 1단계: 키워드 채점 ────────────────────────────────────────────────────────
 
 def _calc_keyword_score(
@@ -36,11 +76,12 @@ def _calc_keyword_score(
     if total_weight == 0:
         return 0, [], []
 
+    lemmas = _extract_lemmas(user_answer)
     matched, missing = [], []
     earned = 0
 
     for kw in keywords:
-        if kw.keyword in user_answer:
+        if _keyword_matches(kw.keyword, user_answer, lemmas):
             matched.append(kw.keyword)
             earned += kw.weight
         else:
@@ -70,12 +111,27 @@ def _score_feedback(final_score: int) -> tuple[FeedbackType, str]:
         )
 
 
+# ── 유형별 키워드 가중치 ──────────────────────────────────────────────────────
+
+_KEYWORD_WEIGHT: dict[str, float] = {
+    "VOCABULARY":  0.7,  # 어휘: 키워드가 곧 정답
+    "FACTUAL":     0.6,  # 사실적: 지문 정보 직접 확인
+    "LOGICAL":     0.4,  # 논리: 구조적, 중간
+    "INFERENTIAL": 0.3,  # 추론적: LLM 판단 비중 높음
+    "CRITICAL":    0.2,  # 비판적: 주관적, LLM 중심
+    "CREATIVE":    0.2,  # 창의적: 매우 주관적
+}
+_DEFAULT_KEYWORD_WEIGHT = 0.4
+
+
 # ── 최종 점수 산출 ────────────────────────────────────────────────────────────
 
-def _calc_final_score(keyword_score: int | None, normalized_score: int) -> int:
+def _calc_final_score(keyword_score: int | None, normalized_score: int,
+                      reading_type: str | None = None) -> int:
     if keyword_score is None:
         return normalized_score
-    return round(keyword_score * 0.4 + normalized_score * 0.6)
+    kw_weight = _KEYWORD_WEIGHT.get(reading_type or "", _DEFAULT_KEYWORD_WEIGHT)
+    return round(keyword_score * kw_weight + normalized_score * (1 - kw_weight))
 
 
 # ── 메인 서비스 ───────────────────────────────────────────────────────────────
@@ -96,7 +152,7 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
         user_answer=req.user_answer,
     )
 
-    final_score = _calc_final_score(kw_score, llm_result["normalized_score"])
+    final_score = _calc_final_score(kw_score, llm_result["normalized_score"], req.reading_type)
     feedback_type, score_feedback = _score_feedback(final_score)
 
     deep = None
@@ -204,6 +260,8 @@ _COMPETENCY_TO_READING_TYPE = {
     "factual": "FACTUAL",
     "inferential": "INFERENTIAL",
     "critical": "CRITICAL",
+    "vocabulary": "VOCABULARY",
+    "logical": "LOGICAL",
 }
 
 
