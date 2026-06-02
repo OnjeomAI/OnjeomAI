@@ -63,13 +63,8 @@ def _strip_choices(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-_SUBJECTIVE_ENDINGS = re.compile(r"시오\s*\.?\s*$")
-
-
 def _fix_objective_question(question: str, reading_type: str) -> str:
     if _OBJECTIVE_PATTERN.search(question):
-        return _FALLBACK_QUESTIONS.get(reading_type, "지문의 핵심 내용을 서술하시오.")
-    if question and not _SUBJECTIVE_ENDINGS.search(question):
         return _FALLBACK_QUESTIONS.get(reading_type, "지문의 핵심 내용을 서술하시오.")
     return question
 
@@ -139,19 +134,6 @@ class ProblemService:
         # 지문이 너무 길면 400자로 자르기
         if len(result["passage_text"]) > MAX_PASSAGE_LEN:
             result["passage_text"] = result["passage_text"][:MAX_PASSAGE_LEN].rsplit(" ", 1)[0]
-
-        # 질문이 fallback이면 2차 호출로 생성
-        if result["question_text"] in _FALLBACK_QUESTIONS.values():
-            q_messages = [
-                {"role": "system", "content": "다음 지문을 읽고 주관식 서술형 질문을 1개만 만드시오. 질문은 반드시 '~하시오', '~서술하시오', '~설명하시오', '~논하시오' 중 하나로 끝나야 합니다. 질문 외에 다른 말은 쓰지 마시오. 예시: '지문에서 ~의 의미를 설명하시오.' / '~에 대한 글쓴이의 관점을 서술하시오.'"},
-                {"role": "user", "content": f"[지문]\n{result['passage_text']}"},
-            ]
-            q_output = model_manager.generate(q_messages, max_new_tokens=100)
-            q_lines = [l.strip() for l in q_output.strip().split("\n") if l.strip()]
-            q_text = q_lines[-1].rstrip("?!").strip() if q_lines else ""
-            question = _fix_objective_question(_clean(q_text), reading_type)
-            if question and question not in _FALLBACK_QUESTIONS.values():
-                result["question_text"] = question
 
         # 모범답안이 없거나 너무 짧으면 2차 QA 호출로 생성
         min_len = MIN_ANSWER_LEN.get(difficulty, 50)
