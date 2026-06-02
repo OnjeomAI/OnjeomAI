@@ -105,13 +105,16 @@ class WritingEvaluator:
         return full_text.split("### Response:\n")[-1].strip()
 
     def _parse_json(self, text: str) -> dict:
-        """응답에서 JSON 파싱. 실패 시 빈 dict 반환."""
-        try:
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if match:
-                return json.loads(match.group())
-        except (json.JSONDecodeError, AttributeError):
-            pass
+        """응답에서 첫 번째 유효한 JSON 객체 파싱. 실패 시 빈 dict 반환."""
+        decoder = json.JSONDecoder()
+        for i, char in enumerate(text):
+            if char == '{':
+                try:
+                    obj, _ = decoder.raw_decode(text, i)
+                    if isinstance(obj, dict):
+                        return obj
+                except json.JSONDecodeError:
+                    continue
         return {}
 
     @staticmethod
@@ -244,6 +247,18 @@ class WritingEvaluator:
             "growth_message": data.get("growth_message", default_msg),
             "analysis": data.get("analysis", response),
         }
+
+    # ── 용어 설명 ─────────────────────────────────────────────────────────────
+
+    def explain(self, term: str, passage_text: str | None = None) -> str:
+        """용어/문장을 중학생 수준의 쉬운 말로 2~3문장 설명."""
+        self._load()
+        instruction = "주어진 용어나 문장을 중학생도 이해할 수 있는 쉬운 말로 2~3문장으로 설명하시오."
+        context = f"설명할 용어: {term}"
+        if passage_text:
+            context = f"[지문 참고]\n{passage_text[:500]}\n\n{context}"
+        prompt = ALPACA_PROMPT.format(instruction=instruction, input=context)
+        return self._generate(prompt, max_new_tokens=200)
 
     # ── 약점 분석 리포트 ──────────────────────────────────────────────────────
 

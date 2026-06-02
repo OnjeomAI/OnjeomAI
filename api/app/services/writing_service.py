@@ -304,18 +304,5 @@ def generate_curriculum_plan(req: CurriculumPlanRequest) -> CurriculumPlanRespon
 def explain_term(req: TermExplainRequest) -> TermExplainResponse:
     """용어/문장에 대해 쉬운 말로 설명. passage_text가 있으면 지문 맥락을 활용."""
     evaluator = get_writing_evaluator()
-
-    if req.passage_text:
-        prompt = (
-            f"다음 지문을 참고하여 '{req.term}'을(를) 중학생도 이해할 수 있는 쉬운 말로 2~3문장으로 설명해.\n\n"
-            f"[지문]\n{req.passage_text[:500]}\n\n"
-            f"설명:"
-        )
-    else:
-        prompt = (
-            f"'{req.term}'을(를) 중학생도 이해할 수 있는 쉬운 말로 2~3문장으로 설명해.\n\n"
-            f"설명:"
-        )
-
-    explanation = evaluator._generate(prompt, max_new_tokens=200).strip()
+    explanation = evaluator.explain(req.term, req.passage_text)
     return TermExplainResponse(term=req.term, explanation=explanation)
