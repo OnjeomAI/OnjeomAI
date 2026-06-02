@@ -80,7 +80,7 @@ def _strip_answer_prefix(text: str) -> str:
 
 MIN_PASSAGE_LEN = 100
 MAX_PASSAGE_LEN = 400
-MIN_ANSWER_LEN = {1: 20, 2: 30, 3: 50, 4: 70, 5: 90}
+MIN_ANSWER_LEN = {1: 20, 2: 30, 3: 50, 4: 70, 5: 60}
 
 
 class ProblemService:
@@ -148,7 +148,7 @@ class ProblemService:
             ]
             q_output = model_manager.generate(q_messages, max_new_tokens=100)
             q_lines = [l.strip() for l in q_output.strip().split("\n") if l.strip()]
-            q_text = q_lines[-1] if q_lines else ""
+            q_text = q_lines[-1].rstrip("?!").strip() if q_lines else ""
             question = _fix_objective_question(_clean(q_text), reading_type)
             if question and question not in _FALLBACK_QUESTIONS.values():
                 result["question_text"] = question
