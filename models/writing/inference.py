@@ -17,12 +17,17 @@ ALPACA_PROMPT = (
 
 RELAXED_INSTRUCTION = (
     "주어진 지시문과 학생의 답안을 분석하여, 부족한 점과 개선 방향을 포함한 피드백을 작성하고 "
-    "맨 마지막에 1점부터 4점 사이의 최종 점수를 부여하시오.\n\n"
-    "[유연하고 관대한 채점 기준]\n"
-    "- 4점: 지시문의 핵심 요구사항을 잘 파악하였고 전반적인 흐름이 우수한 답안 "
-    "(사소한 결함은 너그럽게 만점 처리)\n"
-    "- 3점: 지시문은 이해했으나 근거가 다소 평이하거나 논리의 깊이가 아쉬운 일반적인 답안\n"
-    "- 2점: 지시문의 키워드만 겨우 나열했거나 주장의 근거가 심각하게 부족한 답안\n"
+    "맨 마지막에 1점부터 10점 사이의 최종 점수를 부여하시오.\n\n"
+    "[채점 기준]\n"
+    "- 10점: 핵심을 완벽히 파악하고 근거·논리 모두 탁월한 답안\n"
+    "- 9점: 핵심 파악 우수, 논리 흐름 좋으나 아주 사소한 결함\n"
+    "- 8점: 핵심 요구사항 충족, 전반적 흐름 우수 (작은 결함 허용)\n"
+    "- 7점: 방향은 맞고 내용도 있으나 근거 일부 미흡\n"
+    "- 6점: 전반적으로 이해했으나 논리 깊이가 다소 아쉬운 답안\n"
+    "- 5점: 보통 수준, 방향은 맞지만 근거가 평이하거나 설명 부족\n"
+    "- 4점: 키워드는 포함했으나 논리 연결이 약하고 내용이 빈약\n"
+    "- 3점: 키워드만 나열하거나 주장의 근거가 심각하게 부족한 답안\n"
+    "- 2점: 질문 의도를 거의 파악하지 못했거나 내용이 매우 부족\n"
     "- 1점 (최하점): 같은 말을 무의미하게 반복하거나 꼼수가 명백한 답안"
 )
 
@@ -56,7 +61,7 @@ WEAKNESS_REPORT_INSTRUCTION = (
     '"recommendations": ["권장사항1", "권장사항2"]}'
 )
 
-SCORE_MAP = {1: 25, 2: 50, 3: 75, 4: 100}
+SCORE_MAP = {i: i * 10 for i in range(1, 11)}
 
 
 class WritingEvaluator:
@@ -108,11 +113,11 @@ class WritingEvaluator:
 
     @staticmethod
     def _parse_score(text: str) -> int:
-        match = re.search(r"\[최종\s*점수\s*:\s*([1-4])\]", text)
+        match = re.search(r"\[최종\s*점수\s*:\s*(10|[1-9])\]", text)
         if match:
             return int(match.group(1))
-        digits = re.findall(r"\b([1-4])\b", text[-50:])
-        return int(digits[-1]) if digits else 2
+        digits = re.findall(r"\b(10|[1-9])\b", text[-80:])
+        return int(digits[-1]) if digits else 5
 
     @staticmethod
     def _parse_feedback(text: str) -> str:
@@ -144,7 +149,7 @@ class WritingEvaluator:
         self._load()
         context = (
             f"[문제]\n{question_text}\n\n[모범 답안]\n{model_answer}\n\n"
-            f"[학생 답안]\n{user_answer[:700]}\n\n[받은 점수] {score}점 / 100점"
+            f"[학생 답안]\n{user_answer[:700]}\n\n[받은 점수] {score}점 / 100점 (50점 미만 — 개선 필요)"
         )
         prompt = ALPACA_PROMPT.format(instruction=DEEP_ANALYSIS_INSTRUCTION, input=context)
         response = self._generate(prompt, max_new_tokens=300)
