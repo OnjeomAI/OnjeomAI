@@ -20,10 +20,23 @@ DIFFICULTY_DESC = {
 }
 
 _NON_KOREAN = re.compile(r"[^가-힣ᄀ-ᇿ㄰-㆏0-9a-zA-Z\s。．、，,\.\!\?\(\)\[\]\{\}\'\"·…「」『』""''-]")
+_CHOICE_LINE = re.compile(r"^\s*[①②③④⑤]\s|^\s*[1-5][\.）)]\s")
 
 
 def _clean(text: str) -> str:
     return _NON_KOREAN.sub("", text).strip()
+
+
+def _strip_choices(text: str) -> str:
+    """선택지 행(①②③④⑤, 1. 2. 등)을 제거한다."""
+    lines = [l for l in text.split("\n") if not _CHOICE_LINE.match(l)]
+    return "\n".join(lines).strip()
+
+
+_TYPE_HINT = {
+    "VOCABULARY": "지문에 나온 특정 단어나 표현의 의미·쓰임새를 묻는 주관식 서술형 문제 (예: '~의 의미를 문맥에 맞게 설명하시오.')",
+    "LOGICAL": "지문의 논리 구조·인과 관계·흐름을 파악하여 서술하는 주관식 서술형 문제 (예: '~가 일어난 원인을 지문에서 찾아 서술하시오.')",
+}
 
 
 class ProblemService:
@@ -31,10 +44,14 @@ class ProblemService:
         reading_ko = READING_TYPE_KO.get(reading_type, "사실적 이해")
         diff_desc = DIFFICULTY_DESC.get(difficulty, "중학교 수준의")
         topic_hint = f"주제: {topic}\n" if topic else ""
+        type_hint = _TYPE_HINT.get(reading_type, "지문을 바탕으로 한 주관식 서술형 질문 1개")
 
         prompt = f"""{topic_hint}반드시 한국어로만 작성하세요. 다음 조건에 맞는 국어 독해 문제를 만들어주세요.
 - 난이도: {diff_desc}
 - 독해 유형: {reading_ko}
+- 문제 유형: 주관식 서술형 (①②③④⑤ 같은 선택지를 절대 포함하지 마세요)
+
+[문제] 작성 지침: {type_hint}
 
 아래 형식을 정확히 지켜주세요. 각 항목은 반드시 해당 태그 다음 줄에 작성하세요.
 
@@ -42,7 +59,7 @@ class ProblemService:
 (200~400자 분량의 한국어 지문)
 
 [문제]
-(지문을 바탕으로 한 주관식 질문 1개)
+(주관식 서술형 질문 1개 — 선택지 없이 질문문만 작성)
 
 [모범답안]
 (2~4문장의 완전한 한국어 답변)"""
@@ -90,7 +107,7 @@ class ProblemService:
                 answer += stripped + "\n"
 
         passage = _clean(passage.strip())
-        question = _clean(question.strip())
+        question = _clean(_strip_choices(question.strip()))
         answer = _clean(answer.strip())
 
         if not passage:
