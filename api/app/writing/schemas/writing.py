@@ -67,8 +67,8 @@ class DeepAnalysis(BaseModel):
 
 class WritingEvaluateResponse(BaseModel):
     keyword_score: Optional[int] = Field(None, description="1단계 키워드 기반 점수 (0~100). 미입력 시 null")
-    raw_score: int = Field(..., ge=1, le=4, description="LLM 원점수 (1~4점)")
-    normalized_score: int = Field(..., description="LLM 정규화 점수 (25/50/75/100)")
+    raw_score: int = Field(..., ge=1, le=10, description="LLM 원점수 (1~10점)")
+    normalized_score: int = Field(..., description="LLM 정규화 점수 (10/20/.../100)")
     final_score: int = Field(..., ge=0, le=100, description="최종 점수 (0~100)")
     feedback: str = Field(..., description="LLM 채점 피드백")
     feedback_type: FeedbackType = Field(..., description="점수 구간 유형")
