@@ -22,7 +22,7 @@ _CHOICE_LINE = re.compile(r"^\s*[①②③④⑤]\s|^\s*[1-5][\.）)]\s")
 _OBJECTIVE_PATTERN = re.compile(r"(것은|않은\s*것은|알맞은\s*것은|적절한\s*것은|옳은\s*것은|틀린\s*것은)\s*\??")
 _TAG_PASSAGE  = re.compile(r"^\[지문\]\s*(.*)|^지문\s*[:：]\s*(.*)|^지문\s*$")
 _TAG_QUESTION = re.compile(r"^\[문제\]\s*(.*)|^문제\s*[:：]\s*(.*)|^문제\s*$")
-_TAG_ANSWER   = re.compile(r"^\[모범\s*답안\]\s*(.*)|^모범\s*답안\s*[:：]\s*(.*)|^모범\s*답안\s*$")
+_TAG_ANSWER   = re.compile(r"^\[모범\s*답안\]\s*(.*)|^모범\s*답안\s*[:：]\s*(.*)|^모범\s*답안\s*$|^정답\s*[:：]\s*(.*)|^해설\s*[:：]\s*(.*)")
 
 _FALLBACK_QUESTIONS = {
     "FACTUAL":     "지문에서 확인할 수 있는 핵심 내용을 두 가지 이상 서술하시오.",
@@ -152,7 +152,11 @@ class ProblemService:
             m = re.search(r"\[문제\]\s*(.+?)(?=\[모범\s*답안\]|$)", output, re.S)
             question = _fix_objective_question(_clean(m.group(1)), reading_type) if m else ""
         if not answer:
-            m = re.search(r"\[모범\s*답안\]\s*(.+?)$", output, re.S)
+            m = (
+                re.search(r"\[모범\s*답안\]\s*(.+?)$", output, re.S)
+                or re.search(r"정답\s*[:：]\s*(.+?)(?=해설|$)", output, re.S)
+                or re.search(r"해설\s*[:：]\s*(.+?)$", output, re.S)
+            )
             answer = _clean(m.group(1)) if m else ""
 
         if not passage:
