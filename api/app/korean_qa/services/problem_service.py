@@ -44,8 +44,13 @@ def _strip_choices(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+_SUBJECTIVE_ENDINGS = re.compile(r"(하시오|서술하시오|설명하시오|쓰시오|작성하시오)\s*\.?\s*$")
+
+
 def _fix_objective_question(question: str, reading_type: str) -> str:
     if _OBJECTIVE_PATTERN.search(question):
+        return _FALLBACK_QUESTIONS.get(reading_type, "지문의 핵심 내용을 서술하시오.")
+    if question and not _SUBJECTIVE_ENDINGS.search(question):
         return _FALLBACK_QUESTIONS.get(reading_type, "지문의 핵심 내용을 서술하시오.")
     return question
 
