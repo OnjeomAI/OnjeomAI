@@ -53,6 +53,10 @@ class WritingEvaluateRequest(BaseModel):
         default_factory=list,
         description="1단계 채점용 핵심 키워드 목록 (미입력 시 LLM 단독 채점)",
     )
+    reading_type: Optional[str] = Field(
+        None,
+        description="문제 독해 유형 (FACTUAL/INFERENTIAL/CRITICAL/VOCABULARY/LOGICAL/CREATIVE)"
+    )
 
 
 class DeepAnalysis(BaseModel):

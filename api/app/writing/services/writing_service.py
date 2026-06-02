@@ -70,12 +70,27 @@ def _score_feedback(final_score: int) -> tuple[FeedbackType, str]:
         )
 
 
+# ── 유형별 키워드 가중치 ──────────────────────────────────────────────────────
+
+_KEYWORD_WEIGHT: dict[str, float] = {
+    "VOCABULARY":  0.7,  # 어휘: 키워드가 곧 정답
+    "FACTUAL":     0.6,  # 사실적: 지문 정보 직접 확인
+    "LOGICAL":     0.4,  # 논리: 구조적, 중간
+    "INFERENTIAL": 0.3,  # 추론적: LLM 판단 비중 높음
+    "CRITICAL":    0.2,  # 비판적: 주관적, LLM 중심
+    "CREATIVE":    0.2,  # 창의적: 매우 주관적
+}
+_DEFAULT_KEYWORD_WEIGHT = 0.4
+
+
 # ── 최종 점수 산출 ────────────────────────────────────────────────────────────
 
-def _calc_final_score(keyword_score: int | None, normalized_score: int) -> int:
+def _calc_final_score(keyword_score: int | None, normalized_score: int,
+                      reading_type: str | None = None) -> int:
     if keyword_score is None:
         return normalized_score
-    return round(keyword_score * 0.4 + normalized_score * 0.6)
+    kw_weight = _KEYWORD_WEIGHT.get(reading_type or "", _DEFAULT_KEYWORD_WEIGHT)
+    return round(keyword_score * kw_weight + normalized_score * (1 - kw_weight))
 
 
 # ── 메인 서비스 ───────────────────────────────────────────────────────────────
@@ -96,7 +111,7 @@ def evaluate_writing(req: WritingEvaluateRequest) -> WritingEvaluateResponse:
         user_answer=req.user_answer,
     )
 
-    final_score = _calc_final_score(kw_score, llm_result["normalized_score"])
+    final_score = _calc_final_score(kw_score, llm_result["normalized_score"], req.reading_type)
     feedback_type, score_feedback = _score_feedback(final_score)
 
     deep = None
