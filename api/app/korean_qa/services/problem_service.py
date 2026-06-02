@@ -50,6 +50,13 @@ def _fix_objective_question(question: str, reading_type: str) -> str:
     return question
 
 
+def _strip_answer_prefix(text: str) -> str:
+    return re.sub(r"^(해설|정답)\s*[:：]?\s*", "", text).strip()
+
+
+MIN_PASSAGE_LEN = 100
+
+
 class ProblemService:
     def generate(self, difficulty: int, reading_type: str, topic: str | None) -> dict:
         if reading_type not in GENERATABLE_TYPES:
@@ -96,6 +103,11 @@ class ProblemService:
         output = model_manager.generate(messages, max_new_tokens=900)
         result = self._parse_output(output, difficulty, reading_type)
 
+        # 지문이 너무 짧으면 1회 재생성
+        if len(result["passage_text"]) < MIN_PASSAGE_LEN:
+            output = model_manager.generate(messages, max_new_tokens=900)
+            result = self._parse_output(output, difficulty, reading_type)
+
         # 모범답안이 없으면 2차 QA 호출로 생성
         if not result["model_answer"]:
             qa_messages = [
@@ -108,7 +120,9 @@ class ProblemService:
                 m = re.search(r"정답\s*[:：]\s*(.+?)$", qa_output, re.S)
             answer = _clean(m.group(1)) if m else _clean(qa_output.strip())
             if answer:
-                result["model_answer"] = answer
+                result["model_answer"] = _strip_answer_prefix(answer)
+        else:
+            result["model_answer"] = _strip_answer_prefix(result["model_answer"])
 
         return result
 
