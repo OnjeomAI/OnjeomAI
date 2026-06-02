@@ -1,4 +1,5 @@
 import re
+import random
 from app.core.model import model_manager
 
 
@@ -33,6 +34,24 @@ _TYPE_HINT = {
 }
 
 GENERATABLE_TYPES = {"FACTUAL", "INFERENTIAL", "CRITICAL", "CREATIVE"}
+
+_DEFAULT_TOPICS = [
+    "환경 보호와 기후 변화",
+    "독서의 중요성",
+    "진로와 직업 선택",
+    "우정과 갈등 해결",
+    "디지털 기기와 청소년",
+    "건강한 식습관",
+    "봉사 활동의 의미",
+    "전통문화와 현대 생활",
+    "동물 보호와 생태계",
+    "가족 간의 대화와 소통",
+    "학교폭력과 예방",
+    "과학 기술의 발전과 윤리",
+    "미디어 리터러시",
+    "꿈과 목표를 향한 노력",
+    "다문화 사회와 배려",
+]
 
 
 def _clean(text: str) -> str:
@@ -69,7 +88,9 @@ class ProblemService:
             raise ValueError(f"문제 생성 불가 유형: {reading_type}. 생성 가능 유형: {sorted(GENERATABLE_TYPES)}")
         reading_ko = READING_TYPE_KO.get(reading_type, "사실적 이해")
         diff_desc = DIFFICULTY_DESC.get(difficulty, "중학교 수준의")
-        topic_hint = f"주제: {topic}\n" if topic else ""
+        if not topic:
+            topic = random.choice(_DEFAULT_TOPICS)
+        topic_hint = f"주제: {topic}\n"
         type_hint = _TYPE_HINT.get(reading_type, "지문을 바탕으로 한 주관식 서술형 질문 1개")
 
         prompt = f"""{topic_hint}반드시 한국어로만 작성하세요. 다음 조건에 맞는 국어 독해 문제를 만들어주세요.
