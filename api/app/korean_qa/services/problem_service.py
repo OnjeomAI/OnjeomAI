@@ -7,6 +7,8 @@ READING_TYPE_KO = {
     "INFERENTIAL": "추론적 이해",
     "CRITICAL": "비판적 이해",
     "CREATIVE": "창의적 이해",
+    "VOCABULARY": "어휘 이해",
+    "LOGICAL": "논리 이해",
 }
 
 DIFFICULTY_DESC = {

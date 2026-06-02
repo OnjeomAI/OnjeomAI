@@ -204,6 +204,8 @@ _COMPETENCY_TO_READING_TYPE = {
     "factual": "FACTUAL",
     "inferential": "INFERENTIAL",
     "critical": "CRITICAL",
+    "vocabulary": "VOCABULARY",
+    "logical": "LOGICAL",
 }
 
 
