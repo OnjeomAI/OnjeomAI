@@ -139,7 +139,7 @@ class ProblemService:
         min_len = MIN_ANSWER_LEN.get(difficulty, 50)
         if not result["model_answer"] or len(result["model_answer"]) < min_len:
             qa_messages = [
-                {"role": "system", "content": "다음 지문을 읽고 문항에 대한 모범답안을 2~4문장으로 작성하시오."},
+                {"role": "system", "content": "다음 지문을 읽고 문항에 대한 모범답안을 반드시 3문장 이상으로 구체적으로 작성하시오. 짧게 쓰지 마시오."},
                 {"role": "user", "content": f"[지문]\n{result['passage_text']}\n\n[문항]\n{result['question_text']}"},
             ]
             qa_output = model_manager.generate(qa_messages, max_new_tokens=300)
