@@ -81,6 +81,7 @@ OnjeomAI/
 | `POST /api/writing/curriculum/adjust` | 취약 역량 기반 동적 학습 경로 재조정 | 김우주 | 구현 완료 |
 | `POST /api/writing/compare` | 이전·현재 답변 비교 및 성장 메시지 생성 | 김우주 | 구현 완료 |
 | `POST /api/writing/weakness-report` | 역량별 약점 분석 리포트 생성 | 김우주 | 구현 완료 |
+| `POST /api/writing/explain-term` | 용어·문장 쉬운 설명 (Llama) | 김우주 | 구현 완료 |
 | `POST /api/writing/irt/estimate` | IRT 3PL 기반 학생 능력 수준 추정 (1PL 폴백 포함) | 김우주 | 구현 완료 |
 | `POST /api/writing/curriculum-plan` | theta 기반 스테이지 결정 + 취약 역량 우선 문제 배치 | 김우주 | 구현 완료 |
 | `GET /health` | 서버 상태 확인 | - | 구현 완료 |
@@ -548,6 +549,12 @@ feat/*        # 기능 개발
 - [x] Qwen2.5-3B QLoRA fine-tuning (v1, v2)
 - [x] HuggingFace 모델 업로드 (Onjeom/korean_qa)
 - [x] 채점 / RAG 튜터 / 커리큘럼 API 구현
+- [x] AI 문제 자동 생성 (`POST /api/problems/generate`)
+  - [x] topic 없을 시 15개 기본 주제 랜덤 선택 (지문 품질 보장)
+  - [x] 객관식 감지 시 유형별 fallback 질문으로 대체 (`_OBJECTIVE_PATTERN`)
+  - [x] 지문 100~400자 범위 강제 (짧으면 재시도, 길면 절삭)
+  - [x] 난이도별 모범답안 최소 길이 적용 — 미달 시 QA 2차 호출 (max_new_tokens=400)
+  - [x] 모범답안 접두사 제거 (`해설`, `정답` 등)
 
 ### 글쓰기 채점 (담당: 김우주)
 - [x] 글쓰기 평가 데이터 수집 (논술형 + 서술형 + 주제별, AI Hub)
