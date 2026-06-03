@@ -177,15 +177,16 @@ class ProblemService:
         return self._parse_keywords(output)
 
     def _parse_keywords(self, output: str) -> list[dict]:
+        # LLM 출력에서 한국어단어:숫자 패턴을 직접 추출 (앞뒤 설명 텍스트 무시)
+        matches = re.findall(r"([가-힣][가-힣\s]{0,9})[:：]\s*(\d+)", output)
         keywords = []
-        for part in re.split(r"[,，]", output):
-            m = re.match(r"^(.+?)[:：](\d+)", part.strip())
-            if not m:
-                continue
-            kw = m.group(1).strip()
-            weight = int(m.group(2))
-            if kw and 0 < weight <= 100 and len(kw) <= 20:
+        seen = set()
+        for kw, weight_str in matches:
+            kw = kw.strip()
+            weight = int(weight_str)
+            if kw and 0 < weight <= 100 and kw not in seen:
                 keywords.append({"keyword": kw, "weight": weight})
+                seen.add(kw)
 
         if not keywords:
             return []
