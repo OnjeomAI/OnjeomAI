@@ -178,7 +178,7 @@ class ProblemService:
 
     def _parse_keywords(self, output: str) -> list[dict]:
         # LLM 출력에서 한국어단어:숫자 패턴을 직접 추출 (앞뒤 설명 텍스트 무시)
-        matches = re.findall(r"([가-힣][가-힣\s]{0,9})[:：]\s*(\d+)", output)
+        matches = re.findall(r"([가-힣][가-힣 ]{0,9})[:：]\s*(\d+)", output)
         keywords = []
         seen = set()
         for kw, weight_str in matches:
