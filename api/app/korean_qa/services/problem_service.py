@@ -117,6 +117,7 @@ class ProblemService:
                 "model_answer": "[MOCK] 모범답안입니다.",
                 "reading_type": reading_type,
                 "difficulty": difficulty,
+                "keywords": [],
             }
 
         messages = [
@@ -152,7 +153,56 @@ class ProblemService:
         else:
             result["model_answer"] = _strip_answer_prefix(result["model_answer"])
 
+        result["keywords"] = self._extract_keywords(result["passage_text"], result["model_answer"])
         return result
+
+    def _extract_keywords(self, passage: str, model_answer: str) -> list[dict]:
+        prompt = f"""다음 지문과 모범답안을 읽고 채점에 중요한 핵심 키워드를 3~5개 추출하세요.
+
+[지문]
+{passage}
+
+[모범답안]
+{model_answer}
+
+아래 형식으로만 답하세요. 배점 합계는 반드시 100이어야 합니다.
+형식: 키워드1:배점, 키워드2:배점, 키워드3:배점
+예시: 광합성:30, 엽록체:30, 이산화탄소:40"""
+
+        messages = [
+            {"role": "system", "content": "당신은 국어 채점 전문가입니다. 요청된 형식 외에 다른 말은 절대 하지 마세요."},
+            {"role": "user", "content": prompt},
+        ]
+        output = model_manager.generate(messages, max_new_tokens=80)
+        return self._parse_keywords(output)
+
+    def _parse_keywords(self, output: str) -> list[dict]:
+        keywords = []
+        for part in re.split(r"[,，]", output):
+            m = re.match(r"^(.+?)[:：](\d+)", part.strip())
+            if not m:
+                continue
+            kw = m.group(1).strip()
+            weight = int(m.group(2))
+            if kw and 0 < weight <= 100 and len(kw) <= 20:
+                keywords.append({"keyword": kw, "weight": weight})
+
+        if not keywords:
+            return []
+
+        # 배점 합계를 100으로 정규화
+        total = sum(k["weight"] for k in keywords)
+        if total != 100 and total > 0:
+            running = 0
+            for i, k in enumerate(keywords):
+                if i == len(keywords) - 1:
+                    k["weight"] = 100 - running
+                else:
+                    w = max(1, round(k["weight"] * 100 / total))
+                    k["weight"] = w
+                    running += w
+
+        return keywords
 
     def _parse_output(self, output: str, difficulty: int, reading_type: str) -> dict:
         passage, question, answer = "", "", ""

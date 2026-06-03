@@ -2,6 +2,11 @@ from pydantic import BaseModel
 from typing import Optional
 
 
+class GeneratedKeyword(BaseModel):
+    keyword: str
+    weight: int
+
+
 class ProblemGenerateRequest(BaseModel):
     difficulty: int
     reading_type: str
@@ -14,3 +19,4 @@ class ProblemGenerateResponse(BaseModel):
     model_answer: str
     reading_type: str
     difficulty: int
+    keywords: list[GeneratedKeyword] = []
